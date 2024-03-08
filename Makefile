@@ -45,10 +45,14 @@ verify:
 staticcheck:
 	go run honnef.co/go/tools/cmd/staticcheck@latest -checks=all,-ST1000,-U1000 ./...
 
+## scan-vuln: Scan for known GO-vulnarabilities
+.PHONY: scan-vuln
+scan-vuln:
+	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
 ## audit: run quality control checks
 .PHONY: audit
-audit: verify staticcheck
-	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+audit: verify staticcheck # scan-vuln
 	go test -race -buildvcs -vet=off ./...
 
 

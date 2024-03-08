@@ -23,5 +23,8 @@ jobs:
     - name: Audit
       run: make audit
 
+    - name: Vulnarabilities-Scan
+      run: make scan-vuln
+
     - name: Test
       run: make test
