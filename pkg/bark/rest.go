@@ -9,14 +9,14 @@ type (
 
 	// Pagination is a set of common pagination query params
 	Pagination struct {
-		Offset uint `uri:"offset" form:"offset" json:"offset" yaml:"offset" xml:"offset"`
-		Limit  uint `uri:"limit" form:"limit" json:"limit" yaml:"limit" xml:"limit"`
+		Offset uint `uri:"offset" form:"offset" json:"offset,omitempty" yaml:"offset,omitempty" xml:"offset"`
+		Limit  uint `uri:"limit" form:"limit" json:"limit,omitempty" yaml:"limit,omitempty" xml:"limit"`
 	}
 
 	// SearchQuery provides grouping of of query parameters commonly used by REST endpoint that perform search
 	SearchQuery struct {
 		Pagination `uri:",inline" form:",inline"`
-		Filter     string `uri:"labels" form:"labels" json:"labels" yaml:"labels" xml:"labels"`
+		Filter     string `uri:"labels" form:"labels" json:"labels,omitempty" yaml:"labels,omitempty" xml:"labels"`
 	}
 )
 
@@ -30,13 +30,13 @@ type (
 
 	// HResponse is a response object, produced by a server that has semantic references
 	HResponse struct {
-		Links map[string]HLink `form:"_links" json:"_links" yaml:"_links" xml:"_links"`
+		Links map[string]HLink `form:"_links" json:"_links,omitempty" yaml:"_links,omitempty" xml:"_links"`
 	}
 
 	// PaginatedResponse represents common frame used to produce response that returns a collection of results
 	PaginatedResponse[T any] struct {
-		Count int `form:"count" json:"count" yaml:"count" xml:"count"`
-		Data  []T `form:"data" json:"data" yaml:"data" xml:"data"`
+		Count int `form:"count" json:"count,omitempty" yaml:"count,omitempty" xml:"count"`
+		Data  []T `form:"data" json:"data,omitempty" yaml:"data,omitempty" xml:"data"`
 
 		HResponse  `form:",inline" json:",inline" yaml:",inline"`
 		Pagination `form:",inline" json:",inline" yaml:",inline"`

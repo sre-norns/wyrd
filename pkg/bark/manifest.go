@@ -81,6 +81,10 @@ func RequireResourceID(ctx *gin.Context) ResourceRequest {
 	return ctx.MustGet(resourceIDKey).(ResourceRequest)
 }
 
+// VersionedResourceAPI is a middleware to support Resource ID and Version query parameter
+// in the request URL.
+// See `RequireVersionedResource` and `RequireVersionedResourceQuery` for information
+// on how to extract `VersionedResourceID` from the context
 func VersionedResourceAPI() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var versionInfo VersionQuery
@@ -98,10 +102,14 @@ func VersionedResourceAPI() gin.HandlerFunc {
 	}
 }
 
+// RequireVersionedResource is a helper method to extract `VersionedResourceID` from the call context.
+// It must be called after `VersionedResourceAPI()` middleware
 func RequireVersionedResource(ctx *gin.Context) manifest.VersionedResourceID {
 	return ctx.MustGet(versionedIDKey).(manifest.VersionedResourceID)
 }
 
-func RequireVersioneDResourceQuery(ctx *gin.Context) VersionQuery {
+// RequireVersionedResourceQuery is a helper method to extract `VersionQuery` from the call context.
+// It must be called after `VersionedResourceAPI()` middleware
+func RequireVersionedResourceQuery(ctx *gin.Context) VersionQuery {
 	return ctx.MustGet(versionInfoKey).(VersionQuery)
 }
