@@ -19,7 +19,7 @@ type (
 		Version manifest.Version `uri:"version" form:"version" binding:"required"`
 	}
 
-	// CreatedResponse return information about newly created resource
+	// CreatedResponse represents information about newly created resource that is returned in response to 'Create' call.
 	CreatedResponse struct {
 		// Gives us kind info
 		manifest.TypeMeta `json:",inline" yaml:",inline"`
@@ -32,6 +32,10 @@ type (
 	}
 )
 
+// ManifestAPI returns middleware that extract [manifest.ResourceManifest] from an incoming request body.
+// [HTTPHeaderContentType] is used for content-type negotiation.
+// Note, the call is terminated if incorrect [manifest.kind] is passed to the API.
+// Refer to [RequireManifest] to get extract manifest form the call context.
 func ManifestAPI(kind manifest.Kind) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		manifest := manifest.ResourceManifest{
@@ -56,12 +60,14 @@ func ManifestAPI(kind manifest.Kind) gin.HandlerFunc {
 	}
 }
 
+// RequireManifest returns [manifest.ResourceManifest] instance parsed out of request body by [ManifestAPI] middleware.
+// Note: [ManifestAPI] middleware must be setup in the call chain before this call.
 func RequireManifest(ctx *gin.Context) manifest.ResourceManifest {
 	return ctx.MustGet(resourceManifestKey).(manifest.ResourceManifest)
 }
 
-// ResourceAPI is a filter/middleware to add support for resource ID requests
-// Used in conjunction with `RequireResourceId`
+// ResourceAPI return a middleware to add support for parsing of resource IDs from request path.
+// See [RequireResourceID] about how to access [ResourceRequest] containing passed resource ID.
 func ResourceAPI() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var resourceRequest ResourceRequest
@@ -75,16 +81,16 @@ func ResourceAPI() gin.HandlerFunc {
 	}
 }
 
-// RequireResourceID is a shortcut function to get ID of the requested resource from the path.
-// Note: must be used from a request handler that includes `ResourceAPI` in the call chain.
+// RequireResourceID return [ResourceRequest] previously extracted by [ResourceAPI] middleware, containing ID of the requested resource from the path.
+// Note: must be used from a request handler that follows [ResourceAPI] middleware in the call chain.
 func RequireResourceID(ctx *gin.Context) ResourceRequest {
 	return ctx.MustGet(resourceIDKey).(ResourceRequest)
 }
 
-// VersionedResourceAPI is a middleware to support Resource ID and Version query parameter
+// VersionedResourceAPI returns middleware that reads Resource ID and Version query parameter
 // in the request URL.
-// See `RequireVersionedResource` and `RequireVersionedResourceQuery` for information
-// on how to extract `VersionedResourceID` from the context
+// See [RequireVersionedResource] and [RequireVersionedResourceQuery] for information
+// on how to extract [VersionedResourceID] from the call context.
 func VersionedResourceAPI() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var versionInfo VersionQuery
@@ -102,14 +108,14 @@ func VersionedResourceAPI() gin.HandlerFunc {
 	}
 }
 
-// RequireVersionedResource is a helper method to extract `VersionedResourceID` from the call context.
-// It must be called after `VersionedResourceAPI()` middleware
+// RequireVersionedResource is a helper function to extract [manifest.VersionedResourceID] from the call context.
+// Note, it must be called only from a handler that follows after [VersionedResourceAPI] middleware in the call-chain.
 func RequireVersionedResource(ctx *gin.Context) manifest.VersionedResourceID {
 	return ctx.MustGet(versionedIDKey).(manifest.VersionedResourceID)
 }
 
-// RequireVersionedResourceQuery is a helper method to extract `VersionQuery` from the call context.
-// It must be called after `VersionedResourceAPI()` middleware
+// RequireVersionedResourceQuery is a helper function to extract [VersionQuery] from the call context.
+// Note, it must be called only from a handler that follows after [VersionedResourceAPI] middleware in the call-chain.
 func RequireVersionedResourceQuery(ctx *gin.Context) VersionQuery {
 	return ctx.MustGet(versionInfoKey).(VersionQuery)
 }

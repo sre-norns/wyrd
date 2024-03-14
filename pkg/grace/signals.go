@@ -11,8 +11,7 @@ import (
 var shutdownSignals = []os.Signal{os.Interrupt, syscall.SIGTERM}
 var onlyOneSignalHandler = make(chan struct{}) // this is hack to ensure that `SetupSignalHandler` is only called once
 
-// NewSignalHandlingContext registers handlers for shutdownSignals (usually SIGTERM and SIGINT).
-// A context is created which will be canceled on one of these signals.
+// NewSignalHandlingContext returns a new context that is canceled with any of the shutdownSignals (usually SIGTERM and SIGINT).
 // In case of another signal received during cancellation, the application will be terminated with exit code 1.
 func NewSignalHandlingContext() context.Context {
 	close(onlyOneSignalHandler) // panics if called twice

@@ -2,6 +2,7 @@ package manifest
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -9,12 +10,15 @@ import (
 )
 
 var (
-	ErrUnknownKind        = fmt.Errorf("unknown kind")
-	ErrUnexpectedSpecType = fmt.Errorf("unexpected spec type")
-	ErrUninterfacableType = fmt.Errorf("type can not interface")
+	// ErrUnknownKind is the error returned when the 'kind' value goes not match any previously registered type.
+	ErrUnknownKind = errors.New("unknown kind")
+	// ErrUnexpectedSpecType is an error returned when type cast of a .spec in the manifest is not possible to the expected type.
+	ErrUnexpectedSpecType = errors.New("unexpected spec type")
+	// ErrUninterfacableType is an error returned when the type being registered can not be captured by interface.
+	ErrUninterfacableType = errors.New("type can not interface")
 )
 
-// Kind type to represent ID of a type that can be used as a spec in a manifest
+// Kind represents ID of a type that can be used as a spec in a manifest
 type Kind string
 
 // Registry of types that can be used in a manifest spec
@@ -46,6 +50,7 @@ func RegisterKind(kind Kind, proto any) error {
 	return nil
 }
 
+// UnregisterKind unregisters previously registered 'kind' value
 func UnregisterKind(kind Kind) {
 	delete(metaKindRegistry, kind)
 }
@@ -63,9 +68,12 @@ func InstanceOf(kind Kind) (any, error) {
 	return reflect.New(t).Interface(), nil
 }
 
-// KindOf looks-up `kind` id for the given type.
-func KindOf(maybeManifest any) (result Kind, known bool) {
-	val := reflect.ValueOf(maybeManifest)
+// KindOf returns `kind` id for the given type if its a registered kind.
+// maybeSpec is the pointer to a spec value that you want to find corresponding [Kind] id of.
+// result is the [Kind] id of the previously registered type.
+// know is true if the maybeSpec is a value of previously registered type.
+func KindOf(maybeSpec any) (result Kind, known bool) {
+	val := reflect.ValueOf(maybeSpec)
 	t := val.Type()
 	if val.Kind() == reflect.Pointer {
 		t = val.Elem().Type()
@@ -81,9 +89,9 @@ func KindOf(maybeManifest any) (result Kind, known bool) {
 	return
 }
 
-// MustKnowKindOf returns `kind` id of a type and panics if the type is not registered.
-func MustKnowKindOf(maybeManifest any) (kind Kind) {
-	kind, ok := KindOf(maybeManifest)
+// MustKnowKindOf returns [Kind] id of a type or panics if the type has not been previously registered.
+func MustKnowKindOf(maybeSpec any) (kind Kind) {
+	kind, ok := KindOf(maybeSpec)
 	if !ok {
 		panic(ErrUnknownKind)
 	}
@@ -91,13 +99,13 @@ func MustKnowKindOf(maybeManifest any) (kind Kind) {
 	return
 }
 
-// TypeMeta describe individual objects returned by API
+// TypeMeta describe common API information for each API object.
 type TypeMeta struct {
 	APIVersion string `json:"apiVersion,omitempty" yaml:"apiVersion,omitempty"`
 	Kind       Kind   `json:"kind,omitempty" yaml:"kind,omitempty" binding:"required"`
 }
 
-// ObjectMeta represents common information about objects in a systems.
+// ObjectMeta represents common information about resources managed by a service.
 type ObjectMeta struct {
 	// System generated unique identified of this object
 	UUID ResourceID `json:"uid,omitempty" yaml:"uid,omitempty"`
@@ -121,7 +129,7 @@ type ResourceManifest struct {
 	Spec     any        `json:"-" yaml:"-"`
 }
 
-// MarshalJSON is an implementation of golang [Marshaler](https://pkg.go.dev/encoding/json#Marshaler) interface
+// MarshalJSON is an implementation of golang [encoding/json.Marshaler] interface
 func (s ResourceManifest) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
 		TypeMeta `json:",inline"`
@@ -157,7 +165,7 @@ func UnmarshalJSONWithRegister(kind Kind, factory KindFactory, specData json.Raw
 	return spec, err
 }
 
-// UnmarshalJSON is an implementation of golang [Unmarshaler](https://pkg.go.dev/encoding/json#Unmarshaler) interface
+// UnmarshalJSON is an implementation of golang [encoding/json.Unmarshaler] interface
 func (s *ResourceManifest) UnmarshalJSON(data []byte) (err error) {
 	aux := struct {
 		TypeMeta `json:",inline"`
@@ -178,6 +186,7 @@ func (s *ResourceManifest) UnmarshalJSON(data []byte) (err error) {
 	return
 }
 
+// MarshalYAML returns a value that can be easily marshaled to yaml representation.
 func (s ResourceManifest) MarshalYAML() (interface{}, error) {
 	return struct {
 		TypeMeta `json:",inline" yaml:",inline"`
@@ -190,6 +199,7 @@ func (s ResourceManifest) MarshalYAML() (interface{}, error) {
 	}, nil
 }
 
+// UnmarshalYAML decodes manifest object from YAML representation.
 func (s *ResourceManifest) UnmarshalYAML(n *yaml.Node) (err error) {
 	type S ResourceManifest
 	type T struct {

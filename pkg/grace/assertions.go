@@ -21,14 +21,17 @@ type ActionableError struct {
 	callToAction string
 }
 
+// WhatExpected returns string message of what was expected to happen in response to an action.
 func (e *ActionableError) WhatExpected() string {
 	return e.expected
 }
 
+// WhatHappened returns string message of what actually has happened.
 func (e *ActionableError) WhatHappened() string {
 	return e.got
 }
 
+// WhatToDo returns string message of what action(s) user can take to fix the error.
 func (e *ActionableError) WhatToDo() string {
 	return e.callToAction
 }
@@ -38,7 +41,7 @@ func (e *ActionableError) Error() string {
 	return fmt.Sprintf("expected: %s, got: %s; What to do: %s", e.expected, e.got, e.callToAction)
 }
 
-// RaiseError creates an instance of an actionable error `ActionableError`
+// RaiseError returns an instance of an actionable error [ActionableError]
 func RaiseError(
 	expected, got, cta string,
 ) Error {

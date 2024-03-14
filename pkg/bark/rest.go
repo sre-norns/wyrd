@@ -56,6 +56,7 @@ type (
 
 type HResponseOption func(r *HResponse)
 
+// WithLink returns an [HResponseOption] option that adds a HEATOS link to a response object
 func WithLink(role string, link HLink) HResponseOption {
 	return func(r *HResponse) {
 		if r == nil {
@@ -70,8 +71,8 @@ func WithLink(role string, link HLink) HResponseOption {
 	}
 }
 
-// NewErrorResponse creates new error response object from an object implementing error interface.
-// The constructor returns nil if second argument `err` is nil and no options passed.
+// NewErrorResponse return new [ErrorResponse] object built from an object implementing [error] interface.
+// The constructor returns nil if err argument is nil and no other options passed.
 func NewErrorResponse(statusCode int, err error, options ...HResponseOption) (result *ErrorResponse) {
 	if err == nil && len(options) == 0 {
 		return
@@ -94,14 +95,14 @@ func NewErrorResponse(statusCode int, err error, options ...HResponseOption) (re
 	return
 }
 
-// Error implements error interface for ErrorResponse type
+// Error returns string representation of the error to implement error interface for [ErrorResponse] type.
 func (e *ErrorResponse) Error() string {
 	return fmt.Sprintf("%v %s", e.Code, e.Message)
 }
 
-// ClampLimit returns new pagination object that has its `.Limit` set to in between [0, maxLimit].
-// If current value of of .Limit is within the range then it is used,
-// if the value outside of [0, maxLimit] range, maxLimit is used.
+// ClampLimit returns new pagination object that has its [Pagination.Limit] clamped to a value in between [0, maxLimit] range.
+// If current value of of [Pagination.Limit] is within the [0, maxLimit] range then the value is unchanged,
+// if the value of [Pagination.Limit] is outside of [0, maxLimit] range, maxLimit is used.
 func (p Pagination) ClampLimit(maxLimit uint) Pagination {
 	result := Pagination{
 		Offset: p.Offset,

@@ -5,9 +5,10 @@ import (
 	"strconv"
 )
 
-// Version type to represent monotonically increasing versions of a single resource.
+// Version type to represent monotonically orderly versions of a single managed resource.
 type Version uint64
 
+// String returns string representation of the [Version] value
 func (v Version) String() string {
 	return strconv.FormatUint(uint64(v), 10)
 }
@@ -15,8 +16,10 @@ func (v Version) String() string {
 // ResourceID type represents an ID of a resource, duh!
 type ResourceID uint
 
+// InvalidResourceID represents nil value of a [ResourceID] which does not referrers to any resource in a system.
 const InvalidResourceID ResourceID = 0
 
+// String returns string representation of the [ResourceID] value
 func (r ResourceID) String() string {
 	return strconv.FormatInt(int64(r), 10)
 }
@@ -35,6 +38,8 @@ func NewVersionedID(id ResourceID, version Version) VersionedResourceID {
 	}
 }
 
+// String returns string representation of the [VersionedResourceID] value in the `ID@version` format.
+// For example: `132@3` - refers to the resource with ID 132, and specifically 3rd version of it.
 func (r VersionedResourceID) String() string {
 	return fmt.Sprintf("%v@%d", r.ID, r.Version)
 }

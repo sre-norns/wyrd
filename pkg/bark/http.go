@@ -21,17 +21,29 @@ const (
 	authBearerKey = "Bearer"
 
 	// well known HTTP headers
-	HttHeaderAuth         = "Authorization"
-	HttHeaderAccept       = "Accept"
-	HttHeaderLocation     = "Location"
-	HttHeaderContentType  = "Content-Type"
-	HttHeaderCacheControl = "Cache-Control"
+	// HTTPHeaderAuth is a standard [header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Authorization) to communicate authorization information
+	HTTPHeaderAuth = "Authorization"
+
+	// HTTPHeaderAccept is a standard [header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept) communicating media format expected by the client
+	HTTPHeaderAccept = "Accept"
+
+	// HTTPHeaderLocation is a standard [header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Location) returns location of a newly created resource.
+	HTTPHeaderLocation = "Location"
+
+	// HTTPHeaderContentType is a standard [header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Type) inform server of how to interpret request body.
+	HTTPHeaderContentType = "Content-Type"
+
+	// HTTPHeaderCacheControl is a standard [header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control) inform client about caching options for the response received
+	HTTPHeaderCacheControl = "Cache-Control"
 )
 
 var (
+	// ErrUnsupportedMediaType error indicates that [Content-Type](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Type) passed in a client request is not support by the API / endpoint.
 	ErrUnsupportedMediaType = fmt.Errorf("unsupported content type request")
-	ErrInvalidAuthHeader    = fmt.Errorf("invalid Authorization header")
-	ErrWrongKind            = fmt.Errorf("invalid resource kind for the API")
+	// ErrInvalidAuthHeader error indicates incorrectly former [Authorization](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Authorization) header in the message.
+	ErrInvalidAuthHeader = fmt.Errorf("invalid Authorization header")
+	// ErrWrongKind error indicates that [manifest.Kind] passed to an endpoint is not expected by that endpoint.
+	ErrWrongKind = fmt.Errorf("invalid resource kind for the API")
 )
 
 // Lifted from GIN
@@ -46,7 +58,7 @@ func filterFlags(content string) string {
 
 // Get a list of accepted MIME-data types from request headers
 func selectAcceptedType(header http.Header) []string {
-	accepts := header.Values(HttHeaderAccept)
+	accepts := header.Values(HTTPHeaderAccept)
 	result := make([]string, 0, len(accepts))
 	for _, a := range accepts {
 		result = append(result, filterFlags(a))
@@ -73,19 +85,20 @@ func replyWithAcceptedType(c *gin.Context) (responseHandler, error) {
 	return nil, ErrUnsupportedMediaType
 }
 
-// MarshalResponse selects appropriate resource handler based on `Accept` request headers and marshals response object.
+// MarshalResponse selects appropriate resource marshaler based on [HTTPHeaderAccept] request header value and marshals response object.
 func MarshalResponse(ctx *gin.Context, code int, responseValue any) {
 	marshalResponse := ctx.MustGet(responseMarshalKey).(responseHandler)
 	marshalResponse(code, responseValue)
 }
 
-// ReplyResourceCreated is a shortcut to handle 201/Created response. It adds proper `Location` header
+// ReplyResourceCreated is a shortcut to handle 201/Created response.
+// It sets status code to [http.StatusCreated] and adds proper `Location` header to response headers.
 func ReplyResourceCreated(ctx *gin.Context, id any, resource any) {
-	ctx.Header(HttHeaderLocation, fmt.Sprintf("%v/%v", ctx.Request.URL.Path, id))
+	ctx.Header(HTTPHeaderLocation, fmt.Sprintf("%v/%v", ctx.Request.URL.Path, id))
 	MarshalResponse(ctx, http.StatusCreated, resource)
 }
 
-// AbortWithError terminates response-handling chain with an error, and returns provided HTTP error response to a client
+// AbortWithError terminates response-handling chain with an error, and returns provided HTTP error response to the client
 func AbortWithError(ctx *gin.Context, code int, errValue error) {
 	if apiError, ok := errValue.(*ErrorResponse); ok {
 		ctx.AbortWithStatusJSON(apiError.Code, apiError)
@@ -95,8 +108,8 @@ func AbortWithError(ctx *gin.Context, code int, errValue error) {
 	ctx.AbortWithStatusJSON(code, NewErrorResponse(code, errValue))
 }
 
-// ContentTypeAPI is a filter/middleware to add support response marshaler selection based on `Accept` header.
-// Used in conjunction with `MarshalResponse` and `ReplyResourceCreated`
+// ContentTypeAPI returns middleware to support response marshaler selection based on [HTTPHeaderAccept] value.
+// Used in conjunction with [MarshalResponse] and [ReplyResourceCreated]
 func ContentTypeAPI() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		// select response encoder base of accept-type:
@@ -111,8 +124,8 @@ func ContentTypeAPI() gin.HandlerFunc {
 	}
 }
 
-// SearchableAPI is a filter/middleware to add support for `SearchQuery` parameter.
-// See `RequireSearchQuery` usage how to obtain `SearchQuery` object in the request handler
+// SearchableAPI return middleware to support for [SearchQuery] parameter.
+// See [RequireSearchQuery] usage on how to obtain [SearchQuery] value in the request handler
 func SearchableAPI(defaultPaginationLimit uint) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var searchQuery SearchQuery
@@ -126,13 +139,15 @@ func SearchableAPI(defaultPaginationLimit uint) gin.HandlerFunc {
 	}
 }
 
+// RequireSearchQuery returns [SearchQuery] from the call context previously set by [SearchableAPI] middleware in the call chain.
+// Note, the function should only be called from a handler that follows after [SearchableAPI] middleware in the filter chain.
 func RequireSearchQuery(ctx *gin.Context) SearchQuery {
 	return ctx.MustGet(searchQueryKey).(SearchQuery)
 }
 
 func extractAuthBearer(ctx *gin.Context) (string, error) {
 	// Get the "Authorization" header
-	authorization := ctx.Request.Header.Get(HttHeaderAuth)
+	authorization := ctx.Request.Header.Get(HTTPHeaderAuth)
 	if authorization == "" {
 		return "", ErrInvalidAuthHeader
 	}
@@ -146,8 +161,10 @@ func extractAuthBearer(ctx *gin.Context) (string, error) {
 	return parts[1], nil
 }
 
-// AuthBearerAPI is a filter/middleware that extracts "Bearer" token from an incoming request headers
-// See `RequireBearerToken` for info on how to access the token.
+// AuthBearerAPI return a middleware that extracts "Bearer" token from an incoming request headers.
+// The middleware terminates call chain and return [http.StatusUnauthorized] to a client if there is no [HTTPHeaderAuth] headers set.
+// Note the middleware does not check if the token is "valid", only that it has been set.
+// See [RequireBearerToken] for information on how to access the token.
 func AuthBearerAPI() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		token, err := extractAuthBearer(ctx)
@@ -161,8 +178,8 @@ func AuthBearerAPI() gin.HandlerFunc {
 	}
 }
 
-// RequireBearerToken - returns previously extracted "Bearer" token from a request header.
-// Note: It requires AuthBearerAPI() middleware to be in the request handler call-chain.
+// RequireBearerToken returns previously extracted "Bearer" token from the request context.
+// Note this function can only be called after [AuthBearerAPI] middleware in the request handler call-chain.
 func RequireBearerToken(ctx *gin.Context) string {
 	return ctx.MustGet(authBearerKey).(string)
 }
