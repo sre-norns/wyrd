@@ -22,7 +22,7 @@ func (l Labels) Get(key string) string {
 	return l[key]
 }
 
-// Format writes string representation of the [Selector] into the provided sb.
+// Format writes string representation of the [SelectorRule] into the provided sb.
 func (l Labels) Format(sb *strings.Builder) {
 	labelsKey := make(sort.StringSlice, 0, len(l))
 	for key := range l {
@@ -70,19 +70,19 @@ const (
 	LabelSelectorOpDoesNotExist LabelSelectorOperator = "DoesNotExist"
 )
 
-// Selector represents a single math-rule used by [LabelSelector] type to matching [Labels].
+// SelectorRule represents a single math-rule used by [LabelSelector] type to matching [Labels].
 // Nil value doesn't match anything.
-type Selector struct {
+type SelectorRule struct {
 	// Key is the name of the key to select
 	Key string `json:"key,omitempty" yaml:"key,omitempty" `
 	// Op is a math operation to perform. See [LabelSelectorOperator] doc for more info.
 	Op LabelSelectorOperator `json:"operator,omitempty" yaml:"operator,omitempty" `
-	// Values is an optional list of value to apply [Selector.Op] to. For Operator like [Exist] the list must be empty.
+	// Values is an optional list of value to apply [SelectorRule.Op] to. For Operator like [Exist] the list must be empty.
 	Values []string `json:"values,omitempty" yaml:"values,omitempty" `
 }
 
-// Format writes string representation of the [Selector] into the provided sb.
-func (s Selector) Format(sb *strings.Builder) error {
+// Format writes string representation of the [SelectorRule] into the provided sb.
+func (s SelectorRule) Format(sb *strings.Builder) error {
 	switch s.Op {
 	case LabelSelectorOpExists:
 		sb.WriteString(s.Key)
@@ -117,28 +117,28 @@ func (s Selector) Format(sb *strings.Builder) error {
 type LabelSelector struct {
 	MatchLabels Labels `json:"matchLabels,omitempty" yaml:"matchLabels,omitempty" `
 
-	MatchSelector []Selector `json:"matchSelector,omitempty" yaml:"matchSelector,omitempty" `
+	MatchSelector []SelectorRule `json:"matchSelector,omitempty" yaml:"matchSelector,omitempty" `
 }
 
-// AsLabels returns string representation of hte selector or an error.
+// AsLabels returns string representation of the [LabelSelector] or an error.
 // All [LabelSelector.MatchLabels] converted into exact 'equals' operation.
 // All [LabelSelector.MatchSelector] converted into respective representation.
 //
 // For example:
-// ```
+// ```go
 //
-//	LabelSelector{
-//		MatchLabels: Labels {
-//			"env": "dev",
-//			"tier": "fe",
-//		},
+//		LabelSelector{
+//			MatchLabels: Labels {
+//				"env": "dev",
+//				"tier": "fe",
+//			},
 //
-//	MatchSelector: []Selector {
-//		{ Key: "unit", Op: LabelSelectorOpExists },
-//		{ Key: "version", Op: LabelSelectorOpNotIn, Values: []string{"0.9-dev", "0.8-pre"} },
-//	},
+//			MatchSelector: []SelectorRule {
+//				{ Key: "unit", Op: LabelSelectorOpExists },
+//				{ Key: "version", Op: LabelSelectorOpNotIn, Values: []string{"0.9-dev", "0.8-pre"} },
+//			},
+//	}.AsLabels()
 //
-// }.AsLabels()
 // ```
 //
 // Produces:

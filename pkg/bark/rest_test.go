@@ -83,45 +83,45 @@ func TestPagination_ClampLimit(t *testing.T) {
 		},
 		"default-limit": {
 			given: bark.Pagination{
-				Offset: 120,
+				Page: 120,
 			},
 			givenLimit: 32,
 			expect: bark.Pagination{
-				Offset: 120,
-				Limit:  32,
+				Page:     120,
+				PageSize: 32,
 			},
 		},
 		"request-above-limit": {
 			given: bark.Pagination{
-				Offset: 0,
-				Limit:  2000,
+				Page:     0,
+				PageSize: 2000,
 			},
 			givenLimit: 100,
 			expect: bark.Pagination{
-				Offset: 0,
-				Limit:  100,
+				Page:     0,
+				PageSize: 100,
 			},
 		},
 		"given-under-limit": {
 			given: bark.Pagination{
-				Offset: 0,
-				Limit:  100,
+				Page:     0,
+				PageSize: 100,
 			},
 			givenLimit: 2000,
 			expect: bark.Pagination{
-				Offset: 0,
-				Limit:  100,
+				Page:     0,
+				PageSize: 100,
 			},
 		},
 		"limit-zero": {
 			given: bark.Pagination{
-				Offset: 32,
-				Limit:  2000,
+				Page:     32,
+				PageSize: 2000,
 			},
 			givenLimit: 0,
 			expect: bark.Pagination{
-				Offset: 32,
-				Limit:  0,
+				Page:     32,
+				PageSize: 0,
 			},
 		},
 	}

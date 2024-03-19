@@ -2,6 +2,8 @@ package bark
 
 import (
 	"fmt"
+
+	"github.com/sre-norns/wyrd/pkg/manifest"
 )
 
 // Common domain-agnostic types used to create rich REST APIs
@@ -9,12 +11,12 @@ type (
 
 	// Pagination is a set of common pagination query params
 	Pagination struct {
-		Offset uint `uri:"offset" form:"offset" json:"offset,omitempty" yaml:"offset,omitempty" xml:"offset"`
-		Limit  uint `uri:"limit" form:"limit" json:"limit,omitempty" yaml:"limit,omitempty" xml:"limit"`
+		Page     uint `uri:"page" form:"page" json:"page,omitempty" yaml:"page,omitempty" xml:"page"`
+		PageSize uint `uri:"pageSize" form:"pageSize" json:"pageSize,omitempty" yaml:"pageSize,omitempty" xml:"pageSize"`
 	}
 
-	// SearchQuery provides grouping of of query parameters commonly used by REST endpoint that perform search
-	SearchQuery struct {
+	// SearchParams represents grouping of query parameters commonly used by REST endpoint supporting search
+	SearchParams struct {
 		Pagination `uri:",inline" form:",inline"`
 		Filter     string `uri:"labels" form:"labels" json:"labels,omitempty" yaml:"labels,omitempty" xml:"labels"`
 	}
@@ -100,18 +102,43 @@ func (e *ErrorResponse) Error() string {
 	return fmt.Sprintf("%v %s", e.Code, e.Message)
 }
 
+// Offset returns a 0-based index if a pagination was continues.
+func (p Pagination) Offset() uint {
+	return p.Page * p.PageSize
+}
+
+// Limit returns maximum number of items that a query should return.
+// Default value of 0 means that a client haven't specified a limit and the server will use default value.
+func (p Pagination) Limit() uint {
+	return p.PageSize
+}
+
 // ClampLimit returns new pagination object that has its [Pagination.Limit] clamped to a value in between [0, maxLimit] range.
 // If current value of of [Pagination.Limit] is within the [0, maxLimit] range then the value is unchanged,
 // if the value of [Pagination.Limit] is outside of [0, maxLimit] range, maxLimit is used.
 func (p Pagination) ClampLimit(maxLimit uint) Pagination {
 	result := Pagination{
-		Offset: p.Offset,
-		Limit:  p.Limit,
+		Page:     p.Page,
+		PageSize: p.PageSize,
 	}
 
-	if result.Limit > maxLimit || result.Limit == 0 {
-		result.Limit = maxLimit
+	if result.PageSize > maxLimit || result.PageSize == 0 {
+		result.PageSize = maxLimit
 	}
 
 	return result
+}
+
+// BuildQuery returns a [manifest.SearchQuery] query object if the [SearchParams] can be converted to it.
+func (s SearchParams) BuildQuery(pagination Pagination) (manifest.SearchQuery, error) {
+	selector, err := manifest.ParseSelector(s.Filter)
+	if err != nil {
+		return manifest.SearchQuery{}, err
+	}
+
+	return manifest.SearchQuery{
+		Selector: selector,
+		Offset:   pagination.Offset(),
+		Limit:    pagination.Limit(),
+	}, nil
 }

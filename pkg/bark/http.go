@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	"github.com/sre-norns/wyrd/pkg/manifest"
 )
 
 const (
@@ -128,12 +129,17 @@ func ContentTypeAPI() gin.HandlerFunc {
 // See [RequireSearchQuery] usage on how to obtain [SearchQuery] value in the request handler
 func SearchableAPI(defaultPaginationLimit uint) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		var searchQuery SearchQuery
-		if ctx.ShouldBindQuery(&searchQuery) != nil {
-			searchQuery.Limit = defaultPaginationLimit
+		var searchParams SearchParams
+		if ctx.ShouldBindQuery(&searchParams) != nil {
+			searchParams.PageSize = defaultPaginationLimit
 		}
 
-		searchQuery.Pagination = searchQuery.ClampLimit(defaultPaginationLimit)
+		searchQuery, err := searchParams.BuildQuery(searchParams.ClampLimit(defaultPaginationLimit))
+		if err != nil {
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, NewErrorResponse(http.StatusBadRequest, fmt.Errorf("bad search query %w", err)))
+			return
+		}
+
 		ctx.Set(searchQueryKey, searchQuery)
 		ctx.Next()
 	}
@@ -141,8 +147,8 @@ func SearchableAPI(defaultPaginationLimit uint) gin.HandlerFunc {
 
 // RequireSearchQuery returns [SearchQuery] from the call context previously set by [SearchableAPI] middleware in the call chain.
 // Note, the function should only be called from a handler that follows after [SearchableAPI] middleware in the filter chain.
-func RequireSearchQuery(ctx *gin.Context) SearchQuery {
-	return ctx.MustGet(searchQueryKey).(SearchQuery)
+func RequireSearchQuery(ctx *gin.Context) manifest.SearchQuery {
+	return ctx.MustGet(searchQueryKey).(manifest.SearchQuery)
 }
 
 func extractAuthBearer(ctx *gin.Context) (string, error) {
