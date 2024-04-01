@@ -81,6 +81,8 @@ type SelectorRule struct {
 	Values []string `json:"values,omitempty" yaml:"values,omitempty" `
 }
 
+type SelectorRules []SelectorRule
+
 // Format writes string representation of the [SelectorRule] into the provided sb.
 func (s SelectorRule) Format(sb *strings.Builder) error {
 	switch s.Op {
@@ -117,7 +119,7 @@ func (s SelectorRule) Format(sb *strings.Builder) error {
 type LabelSelector struct {
 	MatchLabels Labels `json:"matchLabels,omitempty" yaml:"matchLabels,omitempty" `
 
-	MatchSelector []SelectorRule `json:"matchSelector,omitempty" yaml:"matchSelector,omitempty" `
+	MatchSelector SelectorRules `json:"matchSelector,omitempty" yaml:"matchSelector,omitempty" `
 }
 
 // AsLabels returns string representation of the [LabelSelector] or an error.

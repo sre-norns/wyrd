@@ -17,7 +17,7 @@ Using search filters allows to have standard API with filter labels and paginati
     })
 ```
 
-# Filters
+# Middleware
 The library offers a collection of middleware / filter that streamline implementation of a service responsible for a collection of resource. 
 
 - `ContentTypeAPI` - enables API to support different serialization formats, respecting [`Accept`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept) HTTP Request headers.
@@ -29,8 +29,8 @@ The library offers a collection of middleware / filter that streamline implement
 
 
 
-### Filters: `ContentTypeApi`
-This function produces `gin.HandlerFunc` as middleware to add support for response marshaler selection based on [`Accept`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept) HTTP Request header.
+### Middleware: `ContentTypeAPI`
+This function returns `gin.HandlerFunc` as middleware to add support for response marshaler selection based on [`Accept`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept) HTTP Request header.
 
 It is expected to be used in conjunction with `bark.MarshalResponse` and `bark.ReplyResourceCreated` method that select recommended marshaler method to be used for http response.
 
@@ -52,7 +52,7 @@ Content-Type: application/xml; charset=utf-8
 
 
 #### Usage: 
-```go 
+```go
     api.GET("/artifacts/:id", bark.ContentTypeAPI(), func(ctx *gin.Context) {
         ...
 
@@ -67,3 +67,41 @@ Content-Type: application/xml; charset=utf-8
 
 ``` 
 
+
+### Middleware: `SearchableAPI`
+This function returns `gin.HandlerFunc` as middleware to add support pagination query parameters and  `labels` query parameters.
+The idea is that Rest APIs that returns a collection of results should support pagination and ability to narrows down a dataset returned.
+
+Typical implementation takes shape of query parameters such as `filter` and `page` numbers.
+
+Using `SearchableAPI()` gives users ability to call `RequireSearchQuery` to get an object representing search query passed by clients.
+Note that `RequireSearchQuery` will `panic` if there was not `SearchableAPI` call in the filter chain to add query object to the context.
+
+
+#### Usage: 
+Assuming the server has `/artifacts` REST endpoint that is meant to return a collection of artifacts / objects. With `SearchableAPI` middleware, clients can use `labels` and `page` query parameters to control pagination and filter.
+
+```
+GET /artifacts?labels=key&page=3 HTTP/1.1
+```
+
+To support the above query parameters, following code should be added to the handler:
+```go
+    api.GET("/artifacts", bark.SearchableAPI(), func(ctx *gin.Context) {
+        ...
+        searchQuery := bark.RequireSearchQuery(ctx) 
+
+        results := myservice.Find(ctx, searchQuery)
+        ...
+
+    })
+```
+
+### Middleware: `AuthBearerAPI`
+enables APIs to read Auth Bearer token.
+### Middleware: `ResourceAPI`
+Streamline implementation of APIs that serves a single resource.
+### Middleware: `VersionedResourceAPI` 
+Enables API implementation that can support request to versioned resources.
+### Middleware: `ManifestAPI`
+Helps to streamline implementation of APIs that detail with `manifest.Resource`

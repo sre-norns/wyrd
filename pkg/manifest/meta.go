@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -108,18 +109,39 @@ type TypeMeta struct {
 // ObjectMeta represents common information about resources managed by a service.
 type ObjectMeta struct {
 	// System generated unique identified of this object
-	UUID ResourceID `json:"uid,omitempty" yaml:"uid,omitempty"`
+	UID ResourceID `form:"uid,omitempty" json:"uid,omitempty" yaml:"uid,omitempty" gorm:"type:uuid;default:uuid_generate_v4()"`
 
 	// A sequence number representing a specific generation of the resource.
 	// Populated by the system. Read-only.
 	Version Version `form:"version,omitempty" json:"version,omitempty" yaml:"version,omitempty" xml:"version,omitempty" gorm:"default:1"`
 
 	// Name is a unique human-readable identifier of a resource
-	Name string `json:"name" yaml:"name" binding:"required" gorm:"uniqueIndex"`
+	Name string `form:"name,omitempty" json:"name" yaml:"name" binding:"required" gorm:"uniqueIndex"`
 
 	// Labels is map of string keys and values that can be used to organize and categorize
 	// (scope and select) resources.
 	Labels Labels `form:"labels,omitempty" json:"labels,omitempty" yaml:"labels,omitempty" xml:"labels,omitempty"`
+
+	// CreatedAt is time when the object was created on the server.
+	// It is populated by the system and clients may not set this value.
+	// Read-only.
+	CreatedAt *time.Time `form:"creationTimestamp,omitempty" json:"creationTimestamp,omitempty" yaml:"creationTimestamp,omitempty" xml:"creationTimestamp,omitempty"`
+	// UpdatedAt is time when the object was last update on the server.
+	// It is populated by the system and clients may not set this value.
+	// Read-only.
+	UpdatedAt *time.Time `form:"updateTimestamp,omitempty" json:"updateTimestamp,omitempty" yaml:"updateTimestamp,omitempty" xml:"updateTimestamp,omitempty"`
+	// DeletedAt is time when the object was deleted on the server if ever.
+	// This time is recorded to implement 'tombstones' - objects content may be deleted, while the record of its deletion is retained.
+	// It is populated by the system and clients may not set this value.
+	// Read-only.
+	DeletedAt *time.Time `form:"deletionTimestamp,omitempty" json:"deletionTimestamp,omitempty" yaml:"deletionTimestamp,omitempty" xml:"deletionTimestamp,omitempty" gorm:"index"`
+}
+
+func (m ObjectMeta) GetVersionedID() VersionedResourceID {
+	return VersionedResourceID{
+		ID:      m.UID,
+		Version: m.Version,
+	}
 }
 
 // ResourceManifest is an implementation of custom resource definition.
@@ -131,6 +153,10 @@ type ResourceManifest struct {
 
 // MarshalJSON is an implementation of golang [encoding/json.Marshaler] interface
 func (s ResourceManifest) MarshalJSON() ([]byte, error) {
+	// if s.Metadata.UUID == InvalidResourceID {
+	// 	s.Metadata.UUID = nil
+	// }
+
 	return json.Marshal(&struct {
 		TypeMeta `json:",inline"`
 		Metadata ObjectMeta `json:"metadata"`

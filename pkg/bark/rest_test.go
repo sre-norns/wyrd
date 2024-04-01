@@ -135,3 +135,84 @@ func TestPagination_ClampLimit(t *testing.T) {
 		})
 	}
 }
+
+func TestNewPaginatedResponse(t *testing.T) {
+	type testvalue struct {
+		value string
+	}
+	type paginationInputs struct {
+		items          []testvalue
+		paginationInfo bark.Pagination
+		options        []bark.HResponseOption
+	}
+
+	testCases := map[string]struct {
+		given  paginationInputs
+		expect bark.PaginatedResponse[testvalue]
+	}{
+		"nil-value": {
+			given:  paginationInputs{},
+			expect: bark.PaginatedResponse[testvalue]{},
+		},
+		"nil-value-with-options": {
+			given: paginationInputs{
+				options: []bark.HResponseOption{
+					bark.WithLink("self", bark.HLink{
+						Reference:    "location",
+						Relationship: "?",
+					},
+					),
+				},
+			},
+			expect: bark.PaginatedResponse[testvalue]{
+				HResponse: bark.HResponse{
+					Links: map[string]bark.HLink{
+						"self": bark.HLink{
+							Reference:    "location",
+							Relationship: "?",
+						},
+					},
+				},
+			},
+		},
+		"collection-with-options": {
+			given: paginationInputs{
+				items: []testvalue{
+					{value: "1"},
+					{value: "something"},
+				},
+				options: []bark.HResponseOption{
+					bark.WithLink("self", bark.HLink{
+						Reference:    "location",
+						Relationship: "?",
+					},
+					),
+				},
+			},
+			expect: bark.PaginatedResponse[testvalue]{
+				Count: 2,
+				Data: []testvalue{
+					{value: "1"},
+					{value: "something"},
+				},
+				HResponse: bark.HResponse{
+					Links: map[string]bark.HLink{
+						"self": bark.HLink{
+							Reference:    "location",
+							Relationship: "?",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for name, tc := range testCases {
+		test := tc
+		t.Run(name, func(t *testing.T) {
+			got := bark.NewPaginatedResponse(test.given.items, test.given.paginationInfo, test.given.options...)
+
+			require.Equal(t, test.expect, got)
+		})
+	}
+}

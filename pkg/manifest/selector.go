@@ -1,10 +1,31 @@
 package manifest
 
-import (
-	"fmt"
+type Operator string
 
-	"k8s.io/apimachinery/pkg/labels"
+const (
+	DoesNotExist Operator = "!"
+	Equals       Operator = "="
+	DoubleEquals Operator = "=="
+	In           Operator = "in"
+	NotEquals    Operator = "!="
+	NotIn        Operator = "notin"
+	Exists       Operator = "exists"
+	GreaterThan  Operator = "gt"
+	LessThan     Operator = "lt"
 )
+
+// SelectorRule represents a single math-rule used by [LabelSelector] type to matching [Labels].
+// Nil value doesn't match anything.
+type Requirement struct {
+	// Key is the name of the key to select
+	Key string `json:"key,omitempty" yaml:"key,omitempty" `
+	// Op is a math operation to perform. See [LabelSelectorOperator] doc for more info.
+	Operator Operator `json:"operator,omitempty" yaml:"operator,omitempty" `
+	// Values is an optional list of value to apply [SelectorRule.Op] to. For Operator like [Exist] the list must be empty.
+	Values []string `json:"values,omitempty" yaml:"values,omitempty" `
+}
+
+type Requirements []Requirement
 
 // Selector is an interface for objects that can apply rules to match [Labels]
 type Selector interface {
@@ -16,36 +37,7 @@ type Selector interface {
 
 	// Requirements returns collection of Requirements to expose more selection information.
 	// FIXME: Leaking implementation details
-	Requirements() (requirements labels.Requirements, selectable bool)
-}
-
-// k8Selector is implementation of a [Selector] using k8s api machinery types
-type k8Selector struct {
-	impl labels.Selector
-}
-
-func (s *k8Selector) Matches(labels Labels) bool {
-	return s.impl.Matches(labels)
-}
-
-func (s *k8Selector) Empty() bool {
-	return s.impl.Empty()
-}
-
-func (s *k8Selector) Requirements() (requirements labels.Requirements, selectable bool) {
-	return s.impl.Requirements()
-}
-
-// ParseSelector parses a string that maybe represents a label based selector.
-func ParseSelector(selector string) (Selector, error) {
-	s, err := labels.Parse(selector)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing labels selector: %w", err)
-	}
-
-	return &k8Selector{
-		impl: s,
-	}, nil
+	Requirements() (requirements Requirements, selectable bool)
 }
 
 // SearchQuery represent query object accepted by APIs that implement pagination and label based object selection.

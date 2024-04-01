@@ -56,9 +56,10 @@ type (
 	}
 )
 
+// HResponseOption defines a type of 'optional' function that modifies HResponse properties when a new HResponse is constructed
 type HResponseOption func(r *HResponse)
 
-// WithLink returns an [HResponseOption] option that adds a HEATOS link to a response object
+// WithLink returns an [HResponseOption] option that adds a HATEOAS link to a response object
 func WithLink(role string, link HLink) HResponseOption {
 	return func(r *HResponse) {
 		if r == nil {
@@ -130,15 +131,31 @@ func (p Pagination) ClampLimit(maxLimit uint) Pagination {
 }
 
 // BuildQuery returns a [manifest.SearchQuery] query object if the [SearchParams] can be converted to it.
-func (s SearchParams) BuildQuery(pagination Pagination) (manifest.SearchQuery, error) {
+func (s SearchParams) BuildQuery(defaultLimit uint) (manifest.SearchQuery, error) {
 	selector, err := manifest.ParseSelector(s.Filter)
 	if err != nil {
 		return manifest.SearchQuery{}, err
 	}
 
+	pagination := s.Pagination.ClampLimit(defaultLimit)
 	return manifest.SearchQuery{
 		Selector: selector,
 		Offset:   pagination.Offset(),
 		Limit:    pagination.Limit(),
 	}, nil
+}
+
+// NewPaginatedResponse creates a new paginated response with options to adjust HATEOAS response params
+func NewPaginatedResponse[T any](items []T, pInfo Pagination, options ...HResponseOption) PaginatedResponse[T] {
+	result := PaginatedResponse[T]{
+		Data:       items,
+		Count:      len(items),
+		Pagination: pInfo,
+	}
+
+	for _, o := range options {
+		o(&result.HResponse)
+	}
+
+	return result
 }

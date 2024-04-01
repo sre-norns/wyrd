@@ -13,16 +13,18 @@ func (v Version) String() string {
 	return strconv.FormatUint(uint64(v), 10)
 }
 
-// ResourceID type represents an ID of a resource, duh!
-type ResourceID uint
+// ResourceID type represents unique Identifier of a resource in some namespace, duh!
+// type ResourceID uuid.UUID
+type ResourceID string
 
 // InvalidResourceID represents nil value of a [ResourceID] which does not referrers to any resource in a system.
-const InvalidResourceID ResourceID = 0
+var InvalidResourceID ResourceID = ResourceID("")
 
 // String returns string representation of the [ResourceID] value
-func (r ResourceID) String() string {
-	return strconv.FormatInt(int64(r), 10)
-}
+// func (r ResourceID) String() string {
+// 	// return strconv.FormatInt(int64(r), 10)
+// 	// return uuid.UUID(r).String()
+// }
 
 // VersionedResourceID represents some versioned resources when its required to know not only UUID but exact version of it.
 type VersionedResourceID struct {
