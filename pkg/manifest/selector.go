@@ -1,5 +1,10 @@
 package manifest
 
+import (
+	"errors"
+	"fmt"
+)
+
 type Operator string
 
 const (
@@ -14,18 +19,58 @@ const (
 	LessThan     Operator = "lt"
 )
 
-// SelectorRule represents a single math-rule used by [LabelSelector] type to matching [Labels].
-// Nil value doesn't match anything.
-type Requirement struct {
-	// Key is the name of the key to select
-	Key string `json:"key,omitempty" yaml:"key,omitempty" `
-	// Op is a math operation to perform. See [LabelSelectorOperator] doc for more info.
-	Operator Operator `json:"operator,omitempty" yaml:"operator,omitempty" `
-	// Values is an optional list of value to apply [SelectorRule.Op] to. For Operator like [Exist] the list must be empty.
-	Values []string `json:"values,omitempty" yaml:"values,omitempty" `
+var ErrInvalidOperator = errors.New("invalid operator")
+
+func IsValidOperator(op string) bool {
+	switch Operator(op) {
+	case DoesNotExist, Equals, DoubleEquals, In, NotEquals, NotIn, Exists, GreaterThan, LessThan:
+		return true
+	}
+	return false
 }
 
+// Requirement represents a rule/requirement that a selector is using when evaluating matches
+type Requirement struct {
+	// Key is the name of the key to select
+	key string
+	// Op is a math operation to perform. See [LabelSelectorOperator] doc for more info.
+	operator Operator
+	// Values is an optional list of value to apply [SelectorRule.Op] to. For Operator like [Exist] the list must be empty.
+	values StringSet
+}
+
+// Requirements Represents a collection of requirements.
 type Requirements []Requirement
+
+func NewRequirement(key, op string, values []string) (Requirement, error) {
+	// TODO: Validate key
+	if !IsValidOperator(op) {
+		return Requirement{}, fmt.Errorf("%w: %v", ErrInvalidOperator, op)
+	}
+
+	valSet := make(StringSet)
+	for _, v := range values {
+		valSet[v] = struct{}{}
+	}
+
+	return Requirement{
+		key:      key,
+		operator: Operator(op),
+		values:   valSet,
+	}, nil
+}
+
+func (r *Requirement) Key() string {
+	return r.key
+}
+
+func (r *Requirement) Operator() Operator {
+	return r.operator
+}
+
+func (r *Requirement) Values() StringSet {
+	return r.values
+}
 
 // Selector is an interface for objects that can apply rules to match [Labels]
 type Selector interface {

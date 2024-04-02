@@ -27,11 +27,12 @@ func (s *k8Selector) Requirements() (requirements Requirements, selectable bool)
 
 	results := make(Requirements, 0, len(rules))
 	for _, rule := range rules {
-		results = append(results, Requirement{
-			Key:      rule.Key(),
-			Operator: Operator(rule.Operator()),
-			Values:   rule.Values().List(),
-		})
+		req, err := NewRequirement(rule.Key(), string(rule.Operator()), rule.Values().List())
+		if err != nil {
+			return nil, false
+		}
+
+		results = append(results, req)
 	}
 
 	return results, true

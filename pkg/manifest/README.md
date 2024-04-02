@@ -46,7 +46,7 @@ Once `"mySpec"` kind is registered, you can parse resource definitions:
 
     if resourceDefinition.Kind == KindMyType {
         // Type case _should_ be safe but may fail due to implementation BUGS
-        return resourceDefinition.Spec.(*urth.MySpec)
+        return resourceDefinition.Spec.(*MySpec)
     }
 
 ```
@@ -101,4 +101,4 @@ spec:
 
 #### Implementation note
 Types definitions provided in this package only help to define CRD but for full experience a Storage system must support querying resources based on labels. For example [manifest.LabelSelector] only defines serialization representation of selector but its storage system responsibility to find resources based on this requirements.
-For users of [GORM](https://gorm.io) as their ORM layer, the library that helps to implement labels based selector is [TO BE RELEASED](TBD).
+For users of [GORM](https://gorm.io) as their ORM layer, the library that helps to implement labels based selector is [dbStore](../dbstore/).
