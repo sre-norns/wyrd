@@ -81,7 +81,6 @@ type Selector interface {
 	Empty() bool
 
 	// Requirements returns collection of Requirements to expose more selection information.
-	// FIXME: Leaking implementation details
 	Requirements() (requirements Requirements, selectable bool)
 }
 
