@@ -94,6 +94,15 @@ func (s *DBStore) Find(ctx context.Context, resources any, searchQuery manifest.
 	}
 
 	rtx := tx.Order(s.config.CreatedAtColumnName).Find(resources)
+
+	// log.Print("[DEBUG] SQL: ", tx.ToSQL(func(tx *gorm.DB) *gorm.DB {
+	// 	for _, c := range qs {
+	// 		tx = tx.Where(c)
+	// 	}
+	// 	return tx.Find(&[]Scenario{})
+	// 	return rtx
+	// }))
+
 	return rtx.RowsAffected, rtx.Error
 }
 
@@ -147,13 +156,6 @@ func (s *DBStore) withSelector(ctx context.Context, query manifest.SearchQuery) 
 			return nil, fmt.Errorf("%w: `%v`", ErrUnexpectedSelectorOperator, req.Operator())
 		}
 	}
-
-	// log.Print("[DEBUG] SQL: ", tx.ToSQL(func(tx *gorm.DB) *gorm.DB {
-	// 	for _, c := range qs {
-	// 		tx = tx.Where(c)
-	// 	}
-	// 	return tx.Find(&[]Scenario{})
-	// }))
 
 	tx := s.db.WithContext(ctx).Offset(int(query.Offset)).Limit(int(query.Limit))
 	for _, c := range qs {

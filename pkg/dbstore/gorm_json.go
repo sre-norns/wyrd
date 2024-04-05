@@ -170,11 +170,15 @@ func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
 
 				builder.WriteString(string(jsonQuery.op))
 				if jsonQuery.groupOp {
-					for v := range jsonQuery.groupValueSet {
-						stmt.AddVar(builder, v)
-					}
+					idx := 0
 					builder.WriteString("(")
-					builder.WriteString(jsonQuery.groupValueSet.Join(","))
+					for v := range jsonQuery.groupValueSet {
+						if idx > 0 {
+							builder.WriteByte(',')
+						}
+						stmt.AddVar(builder, v)
+						idx += 1
+					}
 					builder.WriteString(")")
 				} else {
 					if value, ok := jsonQuery.equalsValue.(bool); ok {

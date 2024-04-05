@@ -7,7 +7,9 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
+	"gorm.io/gorm"
 )
 
 var (
@@ -49,6 +51,13 @@ func RegisterKind(kind Kind, proto any) error {
 
 	metaKindRegistry[kind] = t
 	return nil
+}
+
+// MustRegisterKind calls RegisterKind to registers a kind and panics on error
+func MustRegisterKind(kind Kind, proto any) {
+	if err := RegisterKind(kind, proto); err != nil {
+		panic(err)
+	}
 }
 
 // UnregisterKind unregisters previously registered 'kind' value
@@ -109,7 +118,7 @@ type TypeMeta struct {
 // ObjectMeta represents common information about resources managed by a service.
 type ObjectMeta struct {
 	// System generated unique identified of this object
-	UID ResourceID `form:"uid,omitempty" json:"uid,omitempty" yaml:"uid,omitempty" gorm:"type:uuid;default:uuid_generate_v4()"`
+	UID ResourceID `form:"uid,omitempty" json:"uid,omitempty" yaml:"uid,omitempty" gorm:"primaryKey;type:uuid"`
 
 	// A sequence number representing a specific generation of the resource.
 	// Populated by the system. Read-only.
@@ -135,6 +144,11 @@ type ObjectMeta struct {
 	// It is populated by the system and clients may not set this value.
 	// Read-only.
 	DeletedAt *time.Time `form:"deletionTimestamp,omitempty" json:"deletionTimestamp,omitempty" yaml:"deletionTimestamp,omitempty" xml:"deletionTimestamp,omitempty" gorm:"index"`
+}
+
+func (m *ObjectMeta) BeforeCreate(tx *gorm.DB) error {
+	m.UID = ResourceID(uuid.NewString())
+	return nil
 }
 
 func (m ObjectMeta) GetVersionedID() VersionedResourceID {

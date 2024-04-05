@@ -45,3 +45,34 @@ func NewVersionedID(id ResourceID, version Version) VersionedResourceID {
 func (r VersionedResourceID) String() string {
 	return fmt.Sprintf("%v@%d", r.ID, r.Version)
 }
+
+type ResourceModel[SpecType any] struct {
+	ObjectMeta `json:",inline" yaml:",inline"`
+	Spec       SpecType `json:"spec" yaml:"spec" gorm:"embedded"`
+}
+
+func (r *ResourceModel[SpecType]) ToManifest() ResourceManifest {
+	spec := r.Spec
+	return ResourceManifest{
+		TypeMeta: TypeMeta{
+			Kind: MustKnowKindOf(&spec),
+		},
+		Metadata: r.ObjectMeta,
+		Spec:     &spec,
+	}
+}
+
+func ManifestAsResource[SpecType any](newEntry ResourceManifest) (ResourceModel[SpecType], error) {
+	if newEntry.Spec == nil {
+		return ResourceModel[SpecType]{}, fmt.Errorf("spec is nil")
+	}
+	spec, ok := newEntry.Spec.(*SpecType)
+	if !ok {
+		return ResourceModel[SpecType]{}, fmt.Errorf("invalid spec type")
+	}
+
+	return ResourceModel[SpecType]{
+		ObjectMeta: newEntry.Metadata,
+		Spec:       *spec,
+	}, nil
+}
