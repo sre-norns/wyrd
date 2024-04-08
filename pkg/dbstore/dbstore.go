@@ -51,12 +51,46 @@ func NewDBStore(db *gorm.DB, cfg Config) (Store, error) {
 	}, nil
 }
 
-func (s *DBStore) Create(ctx context.Context, value any) error {
-	return s.db.WithContext(ctx).Create(value).Error
+func (s *DBStore) Create(ctx context.Context, value any, options ...Option) error {
+	tContext := NewTransactionContext()
+	for _, o := range options {
+		tContext = o(value, tContext)
+	}
+
+	tx := s.db.WithContext(ctx)
+	for omit := range tContext.Omit {
+		tx = tx.Omit(omit)
+	}
+
+	return tx.Create(value).Error
 }
 
-func (s *DBStore) Get(ctx context.Context, dest any, id manifest.ResourceID) (bool, error) {
-	tx := s.db.WithContext(ctx).First(dest, id)
+func (s *DBStore) CreateLinked(ctx context.Context, value any, link string, model any, options ...Option) error {
+	tContext := NewTransactionContext()
+	for _, o := range options {
+		tContext = o(value, tContext)
+	}
+
+	tx := s.db.Model(model).WithContext(ctx)
+	for omit := range tContext.Omit {
+		tx = tx.Omit(omit)
+	}
+
+	return tx.Association(link).Append(value)
+}
+
+func (s *DBStore) Get(ctx context.Context, dest any, id manifest.ResourceID, options ...Option) (bool, error) {
+	tContext := NewTransactionContext()
+	for _, o := range options {
+		tContext = o(dest, tContext)
+	}
+
+	tx := s.db.WithContext(ctx)
+	for expand := range tContext.Expand {
+		tx = tx.Preload(expand)
+	}
+
+	tx = tx.First(dest, id)
 	if errors.Is(tx.Error, gorm.ErrRecordNotFound) {
 		return false, nil
 	}

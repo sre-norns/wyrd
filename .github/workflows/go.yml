@@ -10,21 +10,31 @@ on:
     branches: [ "main" ]
 
 jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22.1'
+
+    - name: Vulnarabilities-Scan
+      run: make scan-vuln
+
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
         go-version: '1.22.1'
 
     - name: Audit
       run: make audit
-
-    - name: Vulnarabilities-Scan
-      run: make scan-vuln
 
     - name: Test
       run: make test
