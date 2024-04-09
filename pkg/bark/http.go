@@ -73,7 +73,12 @@ func selectAcceptedType(header http.Header) []string {
 type responseHandler func(code int, obj any)
 
 func replyWithAcceptedType(c *gin.Context) (responseHandler, error) {
-	for _, contentType := range selectAcceptedType(c.Request.Header) {
+	accepts := selectAcceptedType(c.Request.Header)
+	if len(accepts) == 0 {
+		return c.JSON, nil
+	}
+
+	for _, contentType := range accepts {
 		switch contentType {
 		case "", "*/*", gin.MIMEJSON:
 			return c.JSON, nil
@@ -146,6 +151,8 @@ func SearchableAPI(defaultPaginationLimit uint) gin.HandlerFunc {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, NewErrorResponse(http.StatusBadRequest, fmt.Errorf("bad search query %w", err)))
 			return
 		}
+
+		searchParams.Pagination = searchParams.Pagination.ClampLimit(defaultPaginationLimit)
 
 		ctx.Set(searchQueryParamsKey, searchParams)
 		ctx.Set(searchQueryKey, searchQuery)
