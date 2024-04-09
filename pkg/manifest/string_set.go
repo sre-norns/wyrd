@@ -4,6 +4,11 @@ import "strings"
 
 type StringSet map[string]struct{}
 
+func (s StringSet) Has(value string) bool {
+	_, ok := s[value]
+	return ok
+}
+
 func (s StringSet) Any() (string, bool) {
 	for key := range s {
 		return key, true

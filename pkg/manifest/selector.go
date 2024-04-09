@@ -3,6 +3,7 @@ package manifest
 import (
 	"errors"
 	"fmt"
+	"strconv"
 )
 
 type Operator string
@@ -72,6 +73,47 @@ func (r *Requirement) Values() StringSet {
 	return r.values
 }
 
+func (r *Requirement) hasValue(value string) bool {
+	return r.values != nil && r.values.Has(value)
+}
+
+func (r *Requirement) Matches(labels Labels) bool {
+	switch r.operator {
+	case Exists:
+		return labels.Has(r.key)
+	case DoesNotExist:
+		return !labels.Has(r.key)
+	case In, Equals, DoubleEquals:
+		return labels.Has(r.key) && r.hasValue(labels.Get(r.key))
+	case NotIn, NotEquals:
+		return !labels.Has(r.key) || !r.hasValue(labels.Get(r.key))
+	case GreaterThan, LessThan:
+		if !labels.Has(r.key) {
+			return false
+		}
+		if len(r.values) != 1 {
+			return false
+		}
+
+		lsValue, err := strconv.ParseInt(labels.Get(r.key), 10, 64)
+		if err != nil {
+			return false
+		}
+
+		var rValue int64
+		for v := range r.values {
+			rValue, err = strconv.ParseInt(v, 10, 64)
+			if err != nil {
+				return false
+			}
+		}
+
+		return (r.operator == GreaterThan && lsValue > rValue) || (r.operator == LessThan && lsValue < rValue)
+	default:
+		return false
+	}
+}
+
 // Selector is an interface for objects that can apply rules to match [Labels]
 type Selector interface {
 	// Matches returns true if the selector matches given label set.
@@ -90,4 +132,32 @@ type SearchQuery struct {
 
 	Offset uint `uri:"offset" form:"offset" json:"offset,omitempty" yaml:"offset,omitempty" xml:"offset"`
 	Limit  uint `uri:"limit" form:"limit" json:"limit,omitempty" yaml:"limit,omitempty" xml:"limit"`
+}
+
+type SimpleSelector struct {
+	requirements []Requirement
+}
+
+func NewSelector(requirements ...Requirement) SimpleSelector {
+	return SimpleSelector{
+		requirements: requirements,
+	}
+}
+
+func (s *SimpleSelector) Matches(labels Labels) bool {
+	for _, requirement := range s.requirements {
+		if matches := requirement.Matches(labels); !matches {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (s *SimpleSelector) Empty() bool {
+	return len(s.requirements) == 0
+}
+
+func (s *SimpleSelector) Requirements() (requirements Requirements, selectable bool) {
+	return s.requirements, true
 }
