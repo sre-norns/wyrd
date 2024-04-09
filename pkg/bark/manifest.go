@@ -81,10 +81,10 @@ func ResourceAPI() gin.HandlerFunc {
 	}
 }
 
-// RequireResourceID return [ResourceRequest] previously extracted by [ResourceAPI] middleware, containing ID of the requested resource from the path.
+// RequireResourceID return [manifest.ResourceID] previously extracted by [ResourceAPI] middleware, containing ID of the requested resource from the path.
 // Note: must be used from a request handler that follows [ResourceAPI] middleware in the call chain.
-func RequireResourceID(ctx *gin.Context) ResourceRequest {
-	return ctx.MustGet(resourceIDKey).(ResourceRequest)
+func RequireResourceID(ctx *gin.Context) manifest.ResourceID {
+	return ctx.MustGet(resourceIDKey).(ResourceRequest).ID
 }
 
 // VersionedResourceAPI returns middleware that reads Resource ID and Version query parameter

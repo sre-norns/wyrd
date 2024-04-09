@@ -11,11 +11,12 @@ import (
 )
 
 const (
-	responseMarshalKey = "responseMarshal"
-	searchQueryKey     = "searchQuery"
-	resourceIDKey      = "resourceId"
-	versionedIDKey     = "versionedId"
-	versionInfoKey     = "versionInfoKey"
+	responseMarshalKey   = "responseMarshal"
+	searchQueryParamsKey = "searchQueryParams"
+	searchQueryKey       = "searchQuery"
+	resourceIDKey        = "resourceId"
+	versionedIDKey       = "versionedId"
+	versionInfoKey       = "versionInfoKey"
 
 	resourceManifestKey = "resourceManifestKey"
 
@@ -99,6 +100,12 @@ func ReplyResourceCreated(ctx *gin.Context, id any, resource any) {
 	MarshalResponse(ctx, http.StatusCreated, resource)
 }
 
+// Found is a shortcut to produce 200/Ok response for paginated data using [NewPaginatedResponse] to wrap items into Pagination frame.
+func Found[T any](ctx *gin.Context, results []T, options ...HResponseOption) {
+	searchParams := RequireSearchQueryParams(ctx)
+	MarshalResponse(ctx, http.StatusOK, NewPaginatedResponse(results, searchParams.Pagination, options...))
+}
+
 // AbortWithError terminates response-handling chain with an error, and returns provided HTTP error response to the client
 func AbortWithError(ctx *gin.Context, code int, errValue error) {
 	if apiError, ok := errValue.(*ErrorResponse); ok {
@@ -140,12 +147,19 @@ func SearchableAPI(defaultPaginationLimit uint) gin.HandlerFunc {
 			return
 		}
 
+		ctx.Set(searchQueryParamsKey, searchParams)
 		ctx.Set(searchQueryKey, searchQuery)
 		ctx.Next()
 	}
 }
 
-// RequireSearchQuery returns [SearchQuery] from the call context previously set by [SearchableAPI] middleware in the call chain.
+// RequireSearchQueryParams returns [SearchParams] from the call context previously set by [SearchableAPI] middleware in the call chain.
+// Note, the function should only be called from a handler that follows after [SearchableAPI] middleware in the filter chain.
+func RequireSearchQueryParams(ctx *gin.Context) SearchParams {
+	return ctx.MustGet(searchQueryParamsKey).(SearchParams)
+}
+
+// RequireSearchQuery returns [manifest.SearchQuery] from the call context previously set by [SearchableAPI] middleware in the call chain.
 // Note, the function should only be called from a handler that follows after [SearchableAPI] middleware in the filter chain.
 func RequireSearchQuery(ctx *gin.Context) manifest.SearchQuery {
 	return ctx.MustGet(searchQueryKey).(manifest.SearchQuery)
