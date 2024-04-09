@@ -43,5 +43,7 @@ type Store interface {
 	Delete(ctx context.Context, value any, id manifest.VersionedResourceID) (existed bool, err error)
 	Update(ctx context.Context, value any, id manifest.VersionedResourceID) (exists bool, err error)
 
+	Upsert(ctx context.Context, value any, options ...Option) error
+
 	CreateLinked(ctx context.Context, value any, link string, owner any, options ...Option) error
 }

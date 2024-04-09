@@ -74,6 +74,12 @@ func (s *DBStore) Create(ctx context.Context, value any, options ...Option) erro
 	return tx.Create(value).Error
 }
 
+func (s *DBStore) Upsert(ctx context.Context, value any, options ...Option) error {
+	tx := applyOptions(s.db.WithContext(ctx), value, options...)
+
+	return tx.Save(value).Error
+}
+
 func (s *DBStore) CreateLinked(ctx context.Context, value any, link string, model any, options ...Option) error {
 	tx := applyOptions(s.db.Model(model).WithContext(ctx), value, options...)
 
