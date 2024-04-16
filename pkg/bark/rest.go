@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ijt/go-anytime"
+
 	"github.com/sre-norns/wyrd/pkg/manifest"
 )
 
@@ -18,9 +20,9 @@ type (
 
 	Timerange struct {
 		// FromTime represents start of a time-range when searching for resources with time aspect.
-		FromTime time.Time `uri:"from" form:"from" json:"from,omitempty" yaml:"from,omitempty" xml:"from"`
+		FromTime string `uri:"from" form:"from" json:"from,omitempty" yaml:"from,omitempty" xml:"from"`
 		// TillTime represents end of a time-range when searching for resources with time aspect.
-		TillTime time.Time `uri:"till" form:"till" json:"till,omitempty" yaml:"till,omitempty" xml:"till"`
+		TillTime string `uri:"till" form:"till" json:"till,omitempty" yaml:"till,omitempty" xml:"till"`
 	}
 
 	// SearchParams represents grouping of query parameters commonly used by REST endpoint supporting search
@@ -151,13 +153,38 @@ func (s SearchParams) BuildQuery(defaultLimit uint) (manifest.SearchQuery, error
 		return manifest.SearchQuery{}, err
 	}
 
+	refTime := time.Now()
+
+	var from time.Time
+	if s.FromTime != "" {
+		t, err := anytime.Parse(s.FromTime, refTime)
+		if err != nil {
+			return manifest.SearchQuery{}, fmt.Errorf("failed to parse 'from' date: %w", err)
+		}
+		from = t
+	}
+	var till time.Time
+	if s.TillTime != "" {
+		t, err := anytime.Parse(s.TillTime, refTime)
+		if err != nil {
+			return manifest.SearchQuery{}, fmt.Errorf("failed to parse 'till' date: %w", err)
+		}
+		till = t
+	}
+
+	if s.FromTime != "" && s.TillTime != "" {
+		if from.After(till) {
+			return manifest.SearchQuery{}, fmt.Errorf("'from' date (%v) is after 'till' (%v)", from, till)
+		}
+	}
+
 	pagination := s.Pagination.ClampLimit(defaultLimit)
 	return manifest.SearchQuery{
 		Selector: selector,
 		Name:     s.Name,
 
-		FromTime: s.FromTime,
-		TillTime: s.TillTime,
+		FromTime: from,
+		TillTime: till,
 
 		Offset: pagination.Offset(),
 		Limit:  pagination.Limit(),

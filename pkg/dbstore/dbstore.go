@@ -233,7 +233,7 @@ func (s *DBStore) withSelector(tx *gorm.DB, jcolumn string, query manifest.Searc
 
 	// Apply name matcher if any
 	if query.Name != "" {
-		tx = tx.Where("name LIKE ?", query.Name)
+		tx = tx.Where("name LIKE ?", fmt.Sprintf("%%%s%%", query.Name))
 	}
 
 	// Apply time-range limit

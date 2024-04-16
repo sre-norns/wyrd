@@ -181,7 +181,7 @@ func SearchableAPI(defaultPaginationLimit uint) gin.HandlerFunc {
 
 		searchQuery, err := searchParams.BuildQuery(defaultPaginationLimit)
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, NewErrorResponse(http.StatusBadRequest, fmt.Errorf("bad search query %w", err)))
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, NewErrorResponse(http.StatusBadRequest, fmt.Errorf("bad search query: %w", err)))
 			return
 		}
 
