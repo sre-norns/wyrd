@@ -125,7 +125,7 @@ type ObjectMeta struct {
 	Version Version `form:"version,omitempty" json:"version,omitempty" yaml:"version,omitempty" xml:"version,omitempty" gorm:"default:1"`
 
 	// Name is a unique human-readable identifier of a resource
-	Name string `form:"name,omitempty" json:"name" yaml:"name" binding:"required" gorm:"uniqueIndex"`
+	Name string `form:"name,omitempty" json:"name" yaml:"name" gorm:"uniqueIndex"`
 
 	// Labels is map of string keys and values that can be used to organize and categorize
 	// (scope and select) resources.
@@ -146,9 +146,16 @@ type ObjectMeta struct {
 	DeletedAt *time.Time `form:"deletionTimestamp,omitempty" json:"deletionTimestamp,omitempty" yaml:"deletionTimestamp,omitempty" xml:"deletionTimestamp,omitempty" gorm:"index"`
 }
 
-func (m *ObjectMeta) BeforeCreate(tx *gorm.DB) error {
-	m.UID = ResourceID(uuid.NewString())
-	return nil
+func (m *ObjectMeta) BeforeCreate(tx *gorm.DB) (err error) {
+	if m.UID == "" {
+		m.UID = ResourceID(uuid.NewString())
+	}
+	return
+}
+
+func (m *ObjectMeta) BeforeSave(tx *gorm.DB) (err error) {
+	m.Version += 1
+	return
 }
 
 func (m ObjectMeta) GetVersionedID() VersionedResourceID {

@@ -126,14 +126,6 @@ type Selector interface {
 	Requirements() (requirements Requirements, selectable bool)
 }
 
-// SearchQuery represent query object accepted by APIs that implement pagination and label based object selection.
-type SearchQuery struct {
-	Selector Selector
-
-	Offset uint `uri:"offset" form:"offset" json:"offset,omitempty" yaml:"offset,omitempty" xml:"offset"`
-	Limit  uint `uri:"limit" form:"limit" json:"limit,omitempty" yaml:"limit,omitempty" xml:"limit"`
-}
-
 type SimpleSelector struct {
 	requirements []Requirement
 }

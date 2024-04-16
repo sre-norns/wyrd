@@ -2,6 +2,7 @@ package bark
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/sre-norns/wyrd/pkg/manifest"
 )
@@ -15,10 +16,23 @@ type (
 		PageSize uint `uri:"pageSize" form:"pageSize" json:"pageSize,omitempty" yaml:"pageSize,omitempty" xml:"pageSize"`
 	}
 
+	Timerange struct {
+		// FromTime represents start of a time-range when searching for resources with time aspect.
+		FromTime time.Time `uri:"from" form:"from" json:"from,omitempty" yaml:"from,omitempty" xml:"from"`
+		// TillTime represents end of a time-range when searching for resources with time aspect.
+		TillTime time.Time `uri:"till" form:"till" json:"till,omitempty" yaml:"till,omitempty" xml:"till"`
+	}
+
 	// SearchParams represents grouping of query parameters commonly used by REST endpoint supporting search
 	SearchParams struct {
-		Pagination `uri:",inline" form:",inline"`
-		Filter     string `uri:"labels" form:"labels" json:"labels,omitempty" yaml:"labels,omitempty" xml:"labels"`
+		Pagination `uri:",inline" form:",inline" json:",inline" yaml:",inline"`
+		Timerange  `uri:",inline" form:",inline" json:",inline" yaml:",inline"`
+
+		// Name is a fuzzy matched name of the resource to search for.
+		Name string `uri:"name" form:"name" json:"name,omitempty" yaml:"name,omitempty" xml:"name"`
+
+		// Filter label-based filter to narrow down results.
+		Filter string `uri:"labels" form:"labels" json:"labels,omitempty" yaml:"labels,omitempty" xml:"labels"`
 	}
 )
 
@@ -140,8 +154,13 @@ func (s SearchParams) BuildQuery(defaultLimit uint) (manifest.SearchQuery, error
 	pagination := s.Pagination.ClampLimit(defaultLimit)
 	return manifest.SearchQuery{
 		Selector: selector,
-		Offset:   pagination.Offset(),
-		Limit:    pagination.Limit(),
+		Name:     s.Name,
+
+		FromTime: s.FromTime,
+		TillTime: s.TillTime,
+
+		Offset: pagination.Offset(),
+		Limit:  pagination.Limit(),
 	}, nil
 }
 

@@ -8,13 +8,13 @@ import (
 
 type TransactionContext struct {
 	Omit   map[string]struct{}
-	Expand map[string]struct{}
+	Expand map[string]manifest.SearchQuery
 }
 
 func NewTransactionContext() TransactionContext {
 	return TransactionContext{
 		Omit:   map[string]struct{}{},
-		Expand: map[string]struct{}{},
+		Expand: map[string]manifest.SearchQuery{},
 	}
 }
 
@@ -27,9 +27,9 @@ func Omit(value string) Option {
 	}
 }
 
-func Expand(value string) Option {
+func Expand(value string, searchQuery manifest.SearchQuery) Option {
 	return func(a any, tc TransactionContext) TransactionContext {
-		tc.Expand[value] = struct{}{}
+		tc.Expand[value] = searchQuery
 		return tc
 	}
 }
@@ -43,7 +43,10 @@ type Store interface {
 	Delete(ctx context.Context, value any, id manifest.VersionedResourceID) (existed bool, err error)
 	Update(ctx context.Context, value any, id manifest.VersionedResourceID) (exists bool, err error)
 
-	Upsert(ctx context.Context, value any, options ...Option) error
+	AddLinked(ctx context.Context, value any, link string, owner any, options ...Option) error
+	FindLinked(ctx context.Context, dest any, link string, owner any, searchQuery manifest.SearchQuery, options ...Option) error
 
-	CreateLinked(ctx context.Context, value any, link string, owner any, options ...Option) error
+	FindNames(ctx context.Context, model any, searchQuery manifest.SearchQuery, options ...Option) (manifest.Labels, error)
+	FindLabels(ctx context.Context, model any, searchQuery manifest.SearchQuery, options ...Option) (manifest.Labels, error)
+	FindLabelValues(ctx context.Context, model any, key string, searchQuery manifest.SearchQuery, options ...Option) (manifest.Labels, error)
 }

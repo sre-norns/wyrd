@@ -46,6 +46,9 @@ var (
 	ErrInvalidAuthHeader = fmt.Errorf("invalid Authorization header")
 	// ErrWrongKind error indicates that [manifest.Kind] passed to an endpoint is not expected by that endpoint.
 	ErrWrongKind = fmt.Errorf("invalid resource kind for the API")
+
+	// ErrResourceNotFound represents error response when requested resource not found.
+	ErrResourceNotFound = &ErrorResponse{Code: http.StatusNotFound, Message: "requested resource not found"}
 )
 
 // Lifted from GIN
@@ -98,17 +101,47 @@ func MarshalResponse(ctx *gin.Context, code int, responseValue any) {
 	marshalResponse(code, responseValue)
 }
 
-// ReplyResourceCreated is a shortcut to handle 201/Created response.
-// It sets status code to [http.StatusCreated] and adds proper `Location` header to response headers.
-func ReplyResourceCreated(ctx *gin.Context, id any, resource any) {
-	ctx.Header(HTTPHeaderLocation, fmt.Sprintf("%v/%v", ctx.Request.URL.Path, id))
-	MarshalResponse(ctx, http.StatusCreated, resource)
+// Ok writes HTTP/OK 200 response and marshals response object with [MarshalResponse] function
+func Ok(ctx *gin.Context, resource any) {
+	MarshalResponse(ctx, http.StatusOK, resource)
+}
+
+// MaybeGotOne checks usual API returned value if requested object exists, if there was an error during the request and
+// if all good response [Ok] with requested resource marshaled using [MarshalResponse] function.
+func MaybeGotOne(ctx *gin.Context, resource any, exists bool, err error) {
+	if err != nil {
+		AbortWithError(ctx, http.StatusBadRequest, err)
+		return
+	}
+	if !exists {
+		AbortWithError(ctx, http.StatusNotFound, ErrResourceNotFound)
+		return
+	}
+
+	Ok(ctx, resource)
 }
 
 // Found is a shortcut to produce 200/Ok response for paginated data using [NewPaginatedResponse] to wrap items into Pagination frame.
 func Found[T any](ctx *gin.Context, results []T, options ...HResponseOption) {
 	searchParams := RequireSearchQueryParams(ctx)
 	MarshalResponse(ctx, http.StatusOK, NewPaginatedResponse(results, searchParams.Pagination, options...))
+}
+
+// FoundOrNot checks error value and response with error or using [Found] function if no error.
+func FoundOrNot[T any](ctx *gin.Context, err error, results []T, options ...HResponseOption) {
+	if err != nil {
+		AbortWithError(ctx, http.StatusBadRequest, err)
+		return
+	}
+
+	Found[T](ctx, results, options...)
+}
+
+// ReplyResourceCreated is a shortcut to handle 201/Created response.
+// It sets status code to [http.StatusCreated] and adds proper `Location` header to response headers.
+func ReplyResourceCreated(ctx *gin.Context, id any, resource any) {
+	ctx.Header(HTTPHeaderLocation, fmt.Sprintf("%v/%v", ctx.Request.URL.Path, id))
+	MarshalResponse(ctx, http.StatusCreated, resource)
 }
 
 // AbortWithError terminates response-handling chain with an error, and returns provided HTTP error response to the client

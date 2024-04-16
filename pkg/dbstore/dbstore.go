@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/sre-norns/wyrd/pkg/manifest"
 	"gorm.io/gorm"
@@ -20,6 +21,11 @@ type Config struct {
 	VersionColumnName   string
 	LabelsColumnName    string
 	CreatedAtColumnName string
+}
+
+type rawJSONSQL struct {
+	Key   string
+	Value string
 }
 
 type DBStore struct {
@@ -74,16 +80,26 @@ func (s *DBStore) Create(ctx context.Context, value any, options ...Option) erro
 	return tx.Create(value).Error
 }
 
-func (s *DBStore) Upsert(ctx context.Context, value any, options ...Option) error {
-	tx := applyOptions(s.db.WithContext(ctx), value, options...)
+// func (s *DBStore) Upsert(ctx context.Context, value any, options ...Option) error {
+// 	tx := applyOptions(s.db.WithContext(ctx), value, options...)
 
-	return tx.Save(value).Error
-}
+// 	return tx.Save(value).Error
+// }
 
-func (s *DBStore) CreateLinked(ctx context.Context, value any, link string, model any, options ...Option) error {
+func (s *DBStore) AddLinked(ctx context.Context, value any, link string, model any, options ...Option) error {
 	tx := applyOptions(s.db.Model(model).WithContext(ctx), value, options...)
 
 	return tx.Association(link).Append(value)
+}
+
+func (s *DBStore) FindLinked(ctx context.Context, dest any, link string, owner any, searchQuery manifest.SearchQuery, options ...Option) error {
+	tx := applyOptions(s.db.Model(owner).WithContext(ctx), dest, options...)
+	tx, err := s.withSelector(tx, s.config.LabelsColumnName, searchQuery)
+	if err != nil {
+		return err
+	}
+
+	return tx.Association(link).Find(dest)
 }
 
 func (s *DBStore) Get(ctx context.Context, dest any, id manifest.ResourceID, options ...Option) (bool, error) {
@@ -121,7 +137,7 @@ func (s *DBStore) Delete(ctx context.Context, value any, id manifest.VersionedRe
 }
 
 func (s *DBStore) Find(ctx context.Context, resources any, searchQuery manifest.SearchQuery, options ...Option) (int64, error) {
-	tx, err := s.withSelector(ctx, searchQuery)
+	tx, err := s.withSelector(s.db.WithContext(ctx), s.config.LabelsColumnName, searchQuery)
 	if err != nil {
 		return 0, err
 	}
@@ -140,8 +156,90 @@ func (s *DBStore) Find(ctx context.Context, resources any, searchQuery manifest.
 	return rtx.RowsAffected, rtx.Error
 }
 
-func (s *DBStore) withSelector(ctx context.Context, query manifest.SearchQuery) (*gorm.DB, error) {
-	tx := s.db.WithContext(ctx).Offset(int(query.Offset)).Limit(int(query.Limit))
+func (s *DBStore) FindNames(ctx context.Context, model any, searchQuery manifest.SearchQuery, options ...Option) (manifest.Labels, error) {
+	tx := limitedQuery(s.db.Model(model).WithContext(ctx), searchQuery)
+
+	var names []struct {
+		Name string
+	}
+
+	rtx := tx.Distinct("name").Scan(&names)
+
+	result := make(manifest.Labels, len(names))
+	for _, l := range names {
+		result[l.Name] = ""
+	}
+
+	return result, rtx.Error
+}
+
+func (s *DBStore) FindLabelValues(ctx context.Context, model any, key string, searchQuery manifest.SearchQuery, options ...Option) (manifest.Labels, error) {
+	var ls []rawJSONSQL
+
+	tx := limitedQuery(s.db.Model(model).WithContext(ctx), searchQuery)
+	rtx := tx.Joins(fmt.Sprintf(", json_each(%s)", s.config.LabelsColumnName)).Where("key = ?", key).Select("key", "value").Scan(&ls)
+
+	result := make(manifest.Labels, len(ls))
+	for _, l := range ls {
+		result[l.Value] = l.Key
+	}
+
+	return result, rtx.Error
+}
+
+func (s *DBStore) FindLabels(ctx context.Context, model any, searchQuery manifest.SearchQuery, options ...Option) (manifest.Labels, error) {
+	var ls []rawJSONSQL
+
+	tx := limitedQuery(s.db.Model(model).WithContext(ctx), searchQuery)
+	rtx := tx.Joins(fmt.Sprintf(", json_each(%s)", s.config.LabelsColumnName)).Distinct("key", "value").Scan(&ls)
+
+	result := make(manifest.Labels, len(ls))
+	for _, l := range ls {
+		result[l.Key] = l.Value
+	}
+
+	return result, rtx.Error
+}
+
+func limitedQuery(inTx *gorm.DB, query manifest.SearchQuery) *gorm.DB {
+	if query.Offset > 0 {
+		inTx = inTx.Offset(int(query.Offset))
+	}
+	if query.Limit > 0 {
+		inTx = inTx.Limit(int(query.Limit))
+	}
+
+	return inTx
+}
+
+func fieldInTimeRange(tx *gorm.DB, column string, from time.Time, till time.Time) *gorm.DB {
+	nilTime := time.Time{}
+	if from != nilTime {
+		if till != nilTime {
+			tx = tx.Where(fmt.Sprintf("%s BETWEEN ? AND ?", column), from, till)
+		} else {
+			tx = tx.Where(fmt.Sprintf("%s  >= ?", column), from)
+		}
+	} else if till != nilTime {
+		tx = tx.Where(fmt.Sprintf("%s < ?", column), till)
+	}
+
+	return tx
+}
+
+func (s *DBStore) withSelector(tx *gorm.DB, jcolumn string, query manifest.SearchQuery) (*gorm.DB, error) {
+	// Apply offset and limit to the query
+	tx = limitedQuery(tx, query)
+
+	// Apply name matcher if any
+	if query.Name != "" {
+		tx = tx.Where("name LIKE ?", query.Name)
+	}
+
+	// Apply time-range limit
+	tx = fieldInTimeRange(tx, "created_at", query.FromTime, query.TillTime)
+
+	// Convert Label-based selector to the SQL query
 	if query.Selector == nil {
 		return tx, nil
 	}
@@ -151,7 +249,7 @@ func (s *DBStore) withSelector(ctx context.Context, query manifest.SearchQuery) 
 		return nil, ErrNonSelectableRequirements
 	}
 
-	qs := make([]any, 0, len(reqs))
+	qs := make([]*JSONQueryExpression, 0, len(reqs))
 	for _, req := range reqs {
 		switch req.Operator() {
 		case manifest.Equals, manifest.DoubleEquals:
@@ -159,7 +257,7 @@ func (s *DBStore) withSelector(ctx context.Context, query manifest.SearchQuery) 
 			if !ok {
 				return nil, ErrNoRequirementsValueProvided
 			}
-			qs = append(qs, JSONQuery(s.config.LabelsColumnName).Equals(value, req.Key()))
+			qs = append(qs, JSONQuery(jcolumn).Equals(value, req.Key()))
 		case manifest.NotEquals:
 			value, ok := req.Values().Any()
 			if !ok {
@@ -167,30 +265,30 @@ func (s *DBStore) withSelector(ctx context.Context, query manifest.SearchQuery) 
 			}
 			// not-equals means it exists but value not equal
 			qs = append(qs,
-				JSONQuery(s.config.LabelsColumnName).HasKey(req.Key()),
-				JSONQuery(s.config.LabelsColumnName).NotEquals(value, req.Key()),
+				JSONQuery(jcolumn).HasKey(req.Key()),
+				JSONQuery(jcolumn).NotEquals(value, req.Key()),
 			)
 		case manifest.GreaterThan:
 			value, ok := req.Values().Any()
 			if !ok {
 				return nil, ErrNoRequirementsValueProvided
 			}
-			qs = append(qs, JSONQuery(s.config.LabelsColumnName).GreaterThan(value, req.Key()))
+			qs = append(qs, JSONQuery(jcolumn).GreaterThan(value, req.Key()))
 		case manifest.LessThan:
 			value, ok := req.Values().Any()
 			if !ok {
 				return nil, ErrNoRequirementsValueProvided
 			}
-			qs = append(qs, JSONQuery(s.config.LabelsColumnName).LessThan(value, req.Key()))
+			qs = append(qs, JSONQuery(jcolumn).LessThan(value, req.Key()))
 
 		case manifest.In:
-			qs = append(qs, JSONQuery(s.config.LabelsColumnName).KeyIn(req.Key(), req.Values()))
+			qs = append(qs, JSONQuery(jcolumn).KeyIn(req.Key(), req.Values()))
 		case manifest.NotIn:
-			qs = append(qs, JSONQuery(s.config.LabelsColumnName).KeyNotIn(req.Key(), req.Values()))
+			qs = append(qs, JSONQuery(jcolumn).KeyNotIn(req.Key(), req.Values()))
 		case manifest.Exists:
-			qs = append(qs, JSONQuery(s.config.LabelsColumnName).HasKey(req.Key()))
+			qs = append(qs, JSONQuery(jcolumn).HasKey(req.Key()))
 		case manifest.DoesNotExist:
-			qs = append(qs, JSONQuery(s.config.LabelsColumnName).HasNoKey(req.Key()))
+			qs = append(qs, JSONQuery(jcolumn).HasNoKey(req.Key()))
 		default:
 			return nil, fmt.Errorf("%w: `%v`", ErrUnexpectedSelectorOperator, req.Operator())
 		}
