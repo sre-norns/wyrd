@@ -3,8 +3,10 @@ package bark_test
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/sre-norns/wyrd/pkg/bark"
+	"github.com/sre-norns/wyrd/pkg/manifest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -215,4 +217,89 @@ func TestNewPaginatedResponse(t *testing.T) {
 			require.Equal(t, test.expect, got)
 		})
 	}
+}
+
+func TestSearchTimeRange(t *testing.T) {
+	// baseTime := time.Time{}
+
+	emptySelector, err := manifest.ParseSelector("")
+	if err != nil {
+		t.Fatalf("failed to setup empty selector for test: %v", err)
+	}
+
+	testCases := map[string]struct {
+		given                bark.SearchParams
+		givenDefaultPageSize uint
+
+		expect      manifest.SearchQuery
+		expectError bool
+	}{
+		"nil-range": {
+			expect: manifest.SearchQuery{
+				Selector: emptySelector,
+			},
+		},
+		"just-name": {
+			givenDefaultPageSize: 25,
+			given: bark.SearchParams{
+				Name: "xyz",
+			},
+			expect: manifest.SearchQuery{
+				Selector: emptySelector,
+				Name:     "xyz",
+				Limit:    25,
+			},
+		},
+
+		"invalid-label-selector": {
+			givenDefaultPageSize: 25,
+			given: bark.SearchParams{
+				Filter: "xyz Like this",
+			},
+			expectError: true,
+		},
+
+		"time-range-absolute": {
+			givenDefaultPageSize: 25,
+			given: bark.SearchParams{
+				Timerange: bark.Timerange{
+					FromTime: "2024-02-27",
+					TillTime: "2024-02-27 13:44:15",
+				},
+			},
+			expect: manifest.SearchQuery{
+				Selector: emptySelector,
+				FromTime: time.Date(2024, 02, 27, 0, 0, 0, 0, time.Local),
+				TillTime: time.Date(2024, 02, 27, 13, 44, 15, 0, time.Local),
+				Limit:    25,
+			},
+		},
+
+		"invalid-range-absolute": {
+			givenDefaultPageSize: 25,
+			given: bark.SearchParams{
+				Timerange: bark.Timerange{
+					FromTime: "2024-02-28",
+					TillTime: "2024-02-27 13:44:15",
+				},
+			},
+			expectError: true,
+		},
+	}
+
+	for name, tc := range testCases {
+		test := tc
+		t.Run(name, func(t *testing.T) {
+			got, err := test.given.BuildQuery(test.givenDefaultPageSize)
+
+			if test.expectError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+
+			require.Equal(t, test.expect, got)
+		})
+	}
+
 }

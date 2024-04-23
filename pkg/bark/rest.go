@@ -2,6 +2,7 @@ package bark
 
 import (
 	"fmt"
+	"runtime/debug"
 	"time"
 
 	"github.com/ijt/go-anytime"
@@ -69,6 +70,16 @@ type (
 		Message string
 
 		HResponse `form:",inline" json:",inline" yaml:",inline"`
+	}
+
+	// Ready / healthcheck response
+	StatusResponse struct {
+		Ready bool `form:"ready" json:"ready,omitempty" yaml:"ready,omitempty" xml:"ready"`
+	}
+
+	VersionResponse struct {
+		Version   string `form:"version" json:"version,omitempty" yaml:"version,omitempty" xml:"version"`
+		GoVersion string `form:"goVersion" json:"goVersion,omitempty" yaml:"goVersion,omitempty" xml:"goVersion"`
 	}
 )
 
@@ -204,4 +215,18 @@ func NewPaginatedResponse[T any](items []T, pInfo Pagination, options ...HRespon
 	}
 
 	return result
+}
+
+func NewVersionResponse() VersionResponse {
+	bi, ok := debug.ReadBuildInfo()
+	if !ok {
+		return VersionResponse{
+			Version: "unknown",
+		}
+	}
+
+	return VersionResponse{
+		Version:   bi.Main.Version,
+		GoVersion: bi.GoVersion,
+	}
 }

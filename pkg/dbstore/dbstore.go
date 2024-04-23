@@ -86,12 +86,6 @@ func (s *DBStore) Create(ctx context.Context, value any, options ...Option) erro
 // 	return tx.Save(value).Error
 // }
 
-func (s *DBStore) AddLinked(ctx context.Context, value any, link string, model any, options ...Option) error {
-	tx := applyOptions(s.db.Model(model).WithContext(ctx), value, options...)
-
-	return tx.Association(link).Append(value)
-}
-
 func (s *DBStore) FindLinked(ctx context.Context, dest any, link string, owner any, searchQuery manifest.SearchQuery, options ...Option) error {
 	tx := applyOptions(s.db.Model(owner).WithContext(ctx), dest, options...)
 	tx, err := s.withSelector(tx, s.config.LabelsColumnName, searchQuery)
@@ -100,6 +94,15 @@ func (s *DBStore) FindLinked(ctx context.Context, dest any, link string, owner a
 	}
 
 	return tx.Association(link).Find(dest)
+}
+
+func (s *DBStore) AddLinked(ctx context.Context, value any, link string, owner any, options ...Option) error {
+	return applyOptions(s.db.Model(owner).WithContext(ctx), value, options...).Association(link).Append(value)
+}
+
+func (s *DBStore) RemoveLinked(ctx context.Context, value any, link string, owner any) error {
+	// return s.db.WithContext(ctx).Model(owner).Where(fmt.Sprintf("%s = ?", s.config.VersionColumnName), id.Version).Association(link).Delete(value)
+	return s.db.WithContext(ctx).Model(owner).Association(link).Delete(value)
 }
 
 func (s *DBStore) Get(ctx context.Context, dest any, id manifest.ResourceID, options ...Option) (bool, error) {
