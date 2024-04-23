@@ -72,11 +72,12 @@ type (
 		HResponse `form:",inline" json:",inline" yaml:",inline"`
 	}
 
-	// Ready / healthcheck response
+	// StatusResponse represents ready state / healthcheck response
 	StatusResponse struct {
 		Ready bool `form:"ready" json:"ready,omitempty" yaml:"ready,omitempty" xml:"ready"`
 	}
 
+	// VersionResponse is a standard response object for /version request to inspect server running version.
 	VersionResponse struct {
 		Version   string `form:"version" json:"version,omitempty" yaml:"version,omitempty" xml:"version"`
 		GoVersion string `form:"goVersion" json:"goVersion,omitempty" yaml:"goVersion,omitempty" xml:"goVersion"`

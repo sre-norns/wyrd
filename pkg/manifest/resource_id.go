@@ -3,6 +3,9 @@ package manifest
 import (
 	"fmt"
 	"strconv"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // Version type to represent monotonically orderly versions of a single managed resource.
@@ -75,4 +78,16 @@ func ManifestAsResource[SpecType any](newEntry ResourceManifest) (ResourceModel[
 		ObjectMeta: newEntry.Metadata,
 		Spec:       *spec,
 	}, nil
+}
+
+func (r *ResourceModel[SpecType]) BeforeCreate(tx *gorm.DB) (err error) {
+	if r.UID == "" {
+		r.UID = ResourceID(uuid.NewString())
+	}
+
+	if r.Name == "" {
+		r.Name = string(r.UID)
+	}
+
+	return
 }

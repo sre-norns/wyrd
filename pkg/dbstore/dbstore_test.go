@@ -22,7 +22,7 @@ type Toy struct {
 type PetSpec struct {
 	Name string
 
-	Toys []Toys `gorm:"many2many:pet_toys;"`
+	Toys []Toy `gorm:"many2many:pet_toys;"`
 }
 
 type Pet struct {

@@ -118,14 +118,14 @@ type TypeMeta struct {
 // ObjectMeta represents common information about resources managed by a service.
 type ObjectMeta struct {
 	// System generated unique identified of this object
-	UID ResourceID `form:"uid,omitempty" json:"uid,omitempty" yaml:"uid,omitempty" gorm:"primaryKey;type:uuid"`
+	UID ResourceID `form:"uid,omitempty" json:"uid,omitempty" yaml:"uid,omitempty" gorm:"primaryKey;not null;type:uuid"`
 
 	// A sequence number representing a specific generation of the resource.
 	// Populated by the system. Read-only.
 	Version Version `form:"version,omitempty" json:"version,omitempty" yaml:"version,omitempty" xml:"version,omitempty" gorm:"default:1"`
 
 	// Name is a unique human-readable identifier of a resource
-	Name string `form:"name,omitempty" json:"name" yaml:"name" gorm:"uniqueIndex"`
+	Name string `form:"name,omitempty" json:"name" yaml:"name" gorm:"uniqueIndex;not null;"`
 
 	// Labels is map of string keys and values that can be used to organize and categorize
 	// (scope and select) resources.
