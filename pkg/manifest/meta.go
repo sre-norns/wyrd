@@ -126,6 +126,7 @@ type ObjectMeta struct {
 
 	// Name is a unique human-readable identifier of a resource
 	Name string `form:"name,omitempty" json:"name" yaml:"name" gorm:"uniqueIndex;not null;"`
+	// TODO: Set null on delete? gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;
 
 	// Labels is map of string keys and values that can be used to organize and categorize
 	// (scope and select) resources.

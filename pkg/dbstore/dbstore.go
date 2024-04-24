@@ -74,10 +74,42 @@ func applyOptions(tx *gorm.DB, value any, options ...Option) *gorm.DB {
 	return tx
 }
 
-func (s *DBStore) Create(ctx context.Context, value any, options ...Option) error {
-	tx := applyOptions(s.db.WithContext(ctx), value, options...)
+func limitedQuery(inTx *gorm.DB, query manifest.SearchQuery) *gorm.DB {
+	if query.Offset > 0 {
+		inTx = inTx.Offset(int(query.Offset))
+	}
+	if query.Limit > 0 {
+		inTx = inTx.Limit(int(query.Limit))
+	}
 
-	return tx.Create(value).Error
+	return inTx
+}
+
+func matchName(tx *gorm.DB, jfield string, query manifest.SearchQuery) *gorm.DB {
+	if query.Name != "" {
+		return tx.Where(jfield+" LIKE ?", fmt.Sprintf("%%%s%%", query.Name))
+	}
+
+	return tx
+}
+
+func limitTimeRange(tx *gorm.DB, column string, from time.Time, till time.Time) *gorm.DB {
+	nilTime := time.Time{}
+	if from != nilTime {
+		if till != nilTime {
+			tx = tx.Where(fmt.Sprintf("%s BETWEEN ? AND ?", column), from, till)
+		} else {
+			tx = tx.Where(fmt.Sprintf("%s  >= ?", column), from)
+		}
+	} else if till != nilTime {
+		tx = tx.Where(fmt.Sprintf("%s < ?", column), till)
+	}
+
+	return tx
+}
+
+func (s *DBStore) Create(ctx context.Context, value any, options ...Option) error {
+	return applyOptions(s.db.WithContext(ctx), value, options...).Create(value).Error
 }
 
 // func (s *DBStore) Upsert(ctx context.Context, value any, options ...Option) error {
@@ -88,7 +120,7 @@ func (s *DBStore) Create(ctx context.Context, value any, options ...Option) erro
 
 func (s *DBStore) FindLinked(ctx context.Context, dest any, link string, owner any, searchQuery manifest.SearchQuery, options ...Option) error {
 	tx := applyOptions(s.db.Model(owner).WithContext(ctx), dest, options...)
-	tx, err := s.withSelector(tx, s.config.LabelsColumnName, searchQuery)
+	tx, err := withSelector(tx, s.config.LabelsColumnName, searchQuery)
 	if err != nil {
 		return err
 	}
@@ -140,12 +172,12 @@ func (s *DBStore) Delete(ctx context.Context, value any, id manifest.VersionedRe
 }
 
 func (s *DBStore) Find(ctx context.Context, resources any, searchQuery manifest.SearchQuery, options ...Option) (int64, error) {
-	tx, err := s.withSelector(s.db.WithContext(ctx), s.config.LabelsColumnName, searchQuery)
+	tx := applyOptions(s.db.WithContext(ctx), resources, options...)
+	tx, err := withSelector(tx, s.config.LabelsColumnName, searchQuery)
 	if err != nil {
 		return 0, err
 	}
 
-	tx = applyOptions(tx, resources, options...)
 	rtx := tx.Order(s.config.CreatedAtColumnName).Find(resources)
 
 	// log.Print("[DEBUG] SQL: ", tx.ToSQL(func(tx *gorm.DB) *gorm.DB {
@@ -161,11 +193,11 @@ func (s *DBStore) Find(ctx context.Context, resources any, searchQuery manifest.
 
 func (s *DBStore) FindNames(ctx context.Context, model any, searchQuery manifest.SearchQuery, options ...Option) (manifest.Labels, error) {
 	tx := limitedQuery(s.db.Model(model).WithContext(ctx), searchQuery)
+	tx = matchName(tx, "name", searchQuery)
 
 	var names []struct {
 		Name string
 	}
-
 	rtx := tx.Distinct("name").Scan(&names)
 
 	result := make(manifest.Labels, len(names))
@@ -180,7 +212,8 @@ func (s *DBStore) FindLabelValues(ctx context.Context, model any, key string, se
 	var ls []rawJSONSQL
 
 	tx := limitedQuery(s.db.Model(model).WithContext(ctx), searchQuery)
-	rtx := tx.Joins(fmt.Sprintf(", json_each(%s)", s.config.LabelsColumnName)).Where("key = ?", key).Select("key", "value").Scan(&ls)
+	tx = tx.Joins(fmt.Sprintf(", json_each(%s)", s.config.LabelsColumnName)).Where("key = ?", key)
+	rtx := matchName(tx, "value", searchQuery).Select("key", "value").Scan(&ls)
 
 	result := make(manifest.Labels, len(ls))
 	for _, l := range ls {
@@ -194,7 +227,8 @@ func (s *DBStore) FindLabels(ctx context.Context, model any, searchQuery manifes
 	var ls []rawJSONSQL
 
 	tx := limitedQuery(s.db.Model(model).WithContext(ctx), searchQuery)
-	rtx := tx.Joins(fmt.Sprintf(", json_each(%s)", s.config.LabelsColumnName)).Distinct("key", "value").Scan(&ls)
+	tx = tx.Joins(fmt.Sprintf(", json_each(%s)", s.config.LabelsColumnName))
+	rtx := matchName(tx, "key", searchQuery).Distinct("key", "value").Scan(&ls)
 
 	result := make(manifest.Labels, len(ls))
 	for _, l := range ls {
@@ -204,43 +238,15 @@ func (s *DBStore) FindLabels(ctx context.Context, model any, searchQuery manifes
 	return result, rtx.Error
 }
 
-func limitedQuery(inTx *gorm.DB, query manifest.SearchQuery) *gorm.DB {
-	if query.Offset > 0 {
-		inTx = inTx.Offset(int(query.Offset))
-	}
-	if query.Limit > 0 {
-		inTx = inTx.Limit(int(query.Limit))
-	}
-
-	return inTx
-}
-
-func fieldInTimeRange(tx *gorm.DB, column string, from time.Time, till time.Time) *gorm.DB {
-	nilTime := time.Time{}
-	if from != nilTime {
-		if till != nilTime {
-			tx = tx.Where(fmt.Sprintf("%s BETWEEN ? AND ?", column), from, till)
-		} else {
-			tx = tx.Where(fmt.Sprintf("%s  >= ?", column), from)
-		}
-	} else if till != nilTime {
-		tx = tx.Where(fmt.Sprintf("%s < ?", column), till)
-	}
-
-	return tx
-}
-
-func (s *DBStore) withSelector(tx *gorm.DB, jcolumn string, query manifest.SearchQuery) (*gorm.DB, error) {
+func withSelector(tx *gorm.DB, jcolumn string, query manifest.SearchQuery) (*gorm.DB, error) {
 	// Apply offset and limit to the query
 	tx = limitedQuery(tx, query)
 
 	// Apply name matcher if any
-	if query.Name != "" {
-		tx = tx.Where("name LIKE ?", fmt.Sprintf("%%%s%%", query.Name))
-	}
+	tx = matchName(tx, "name", query)
 
 	// Apply time-range limit
-	tx = fieldInTimeRange(tx, "created_at", query.FromTime, query.TillTime)
+	tx = limitTimeRange(tx, "created_at", query.FromTime, query.TillTime)
 
 	// Convert Label-based selector to the SQL query
 	if query.Selector == nil {

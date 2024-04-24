@@ -1,6 +1,7 @@
 package bark
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -44,7 +45,7 @@ func ManifestAPI(kind manifest.Kind) gin.HandlerFunc {
 			},
 		}
 		if err := ctx.ShouldBindWith(&manifest, bindingFor(ctx.Request.Method, ctx.ContentType())); err != nil {
-			AbortWithError(ctx, http.StatusBadRequest, err)
+			AbortWithError(ctx, http.StatusBadRequest, fmt.Errorf("failed to parse manifest body: %w", err))
 			return
 		}
 
