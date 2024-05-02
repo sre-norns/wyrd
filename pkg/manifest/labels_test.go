@@ -2,19 +2,25 @@ package manifest_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/sre-norns/wyrd/pkg/manifest"
 	"github.com/stretchr/testify/require"
 )
 
-func TestLabesInterface(t *testing.T) {
-	require.Equal(t, "", manifest.Labels{}.Get("key"))
+func TestLabelsInterface(t *testing.T) {
+	require.Zero(t, manifest.Labels{}.Get("key"))
 	require.Equal(t, "value", manifest.Labels{"key": "value"}.Get("key"))
 
 	require.Equal(t, false, manifest.Labels{"key": "value"}.Has("key-2"))
 	require.Equal(t, false, manifest.Labels{}.Has("key"))
 	require.Equal(t, true, manifest.Labels{"key": "value"}.Has("key"))
+
+	require.Empty(t, manifest.Labels{}.Slice())
+
+	var nilLabels manifest.Labels
+	require.Zero(t, nilLabels.Slice())
 }
 
 func TestLabels_Merging(t *testing.T) {
@@ -76,6 +82,54 @@ func TestLabels_Merging(t *testing.T) {
 	}
 }
 
+func TestLabels_Formatting(t *testing.T) {
+	testCases := map[string]struct {
+		given  manifest.Labels
+		expect string
+	}{
+		"nil": {
+			given:  nil,
+			expect: "",
+		},
+		"empty": {
+			given:  manifest.Labels{},
+			expect: "",
+		},
+		"identity": {
+			given: manifest.Labels{
+				"key": "value",
+			},
+			expect: "key=value",
+		},
+		"two": {
+			given: manifest.Labels{
+				"key-1": "value-1",
+				"key-2": "value-2",
+			},
+			expect: "key-1=value-1,key-2=value-2",
+		},
+		"mixed-bag": {
+			given: manifest.Labels{
+				"key-1": "value-1",
+				"adsf":  "value-Wooh",
+				"betta": "value",
+				"ckey":  "0",
+			},
+			expect: "adsf=value-Wooh,betta=value,ckey=0,key-1=value-1",
+		},
+	}
+
+	for name, tc := range testCases {
+		test := tc
+		t.Run(fmt.Sprintf("formatting:%s", name), func(t *testing.T) {
+			sb := strings.Builder{}
+
+			test.given.Format(&sb)
+			require.EqualValues(t, test.expect, sb.String())
+		})
+	}
+}
+
 func TestLabelSelector_AsLabels(t *testing.T) {
 	testCases := map[string]struct {
 		given       manifest.LabelSelector
@@ -120,7 +174,7 @@ func TestLabelSelector_AsLabels(t *testing.T) {
 					{Key: "role", Op: manifest.LabelSelectorOpDoesNotExist},
 				},
 			},
-			expect: "key,tier notin (frontend, backend),!role",
+			expect: "key,tier notin (frontend,backend),!role",
 		},
 
 		"keys-mix": {
@@ -134,7 +188,34 @@ func TestLabelSelector_AsLabels(t *testing.T) {
 					{Key: "tier", Op: manifest.LabelSelectorOpNotIn, Values: []string{"frontend", "backend"}},
 				},
 			},
-			expect: "key=value,other_key=xyz,key,tier notin (frontend, backend)",
+			expect: "key=value,other_key=xyz,key,tier notin (frontend,backend)",
+		},
+		"mixed-bag": {
+			given: manifest.LabelSelector{
+				MatchLabels: manifest.Labels{
+					"env":  "dev",
+					"tier": "fe",
+				},
+				MatchSelector: []manifest.SelectorRule{
+					{Key: "unit", Op: manifest.LabelSelectorOpExists},
+					{Key: "version", Op: manifest.LabelSelectorOpNotIn, Values: []string{"0.9-dev", "0.8-pre"}},
+				},
+			},
+			expect: "env=dev,tier=fe,unit,version notin (0.9-dev,0.8-pre)",
+		},
+		"mixed-bag-2": {
+			given: manifest.LabelSelector{
+				MatchLabels: manifest.Labels{
+					"env": "dev",
+				},
+				MatchSelector: []manifest.SelectorRule{
+					{Key: "env", Op: manifest.LabelSelectorOpExists},
+					{Key: "unit", Op: manifest.LabelSelectorOpDoesNotExist},
+					{Key: "version", Op: manifest.LabelSelectorOpNotIn, Values: []string{"0.9", "0.8"}},
+					{Key: "phase", Op: manifest.LabelSelectorOpIn, Values: []string{}},
+				},
+			},
+			expect: "env=dev,env,!unit,version notin (0.9,0.8),phase in ()",
 		},
 	}
 
@@ -302,6 +383,71 @@ func TestParseSelector(t *testing.T) {
 				},
 			},
 		},
+		"num-ordering": {
+			given: "key < 32, other-key > 3",
+			subcases: []subcase{
+				{
+					// Both keys exist and has value in the range required
+					given: manifest.Labels{
+						"key":       "16",
+						"other-key": "4",
+					},
+					expect: true,
+				},
+				{
+					// Both keys exist and but only one value is in the range required
+					given: manifest.Labels{
+						"key":       "16",
+						"other-key": "-6",
+					},
+					expect: false,
+				},
+				{
+					// A single key with valid value exists
+					given: manifest.Labels{
+						"key": "16",
+					},
+					expect: false,
+				},
+				{
+					// Both keys exists, but only one has numeric value
+					given: manifest.Labels{
+						"key":       "16",
+						"other-key": "Not-a-number",
+					},
+					expect: false,
+				},
+			},
+		},
+		"key-in-range": {
+			given: "key < 32, key > 16",
+			subcases: []subcase{
+				{ // In range
+					given: manifest.Labels{
+						"key": "24",
+					},
+					expect: true,
+				},
+				{ // Above the range
+					given: manifest.Labels{
+						"key": "64",
+					},
+					expect: false,
+				},
+				{ // Below the range
+					given: manifest.Labels{
+						"key": "4",
+					},
+					expect: false,
+				},
+				{ // No key
+					given: manifest.Labels{
+						"other-key": "23",
+					},
+					expect: false,
+				},
+			},
+		},
 	}
 
 	for name, tc := range testCases {
@@ -314,9 +460,7 @@ func TestParseSelector(t *testing.T) {
 				require.NoError(t, err, "expected error: %v", test.expect.errors)
 			}
 
-			if test.expect.empty {
-				require.True(t, selector.Empty(), "expect empty selector")
-			}
+			require.Equal(t, test.expect.empty, selector.Empty(), "expect empty selector")
 
 			for _, cas := range test.subcases {
 				got := selector.Matches(cas.given)

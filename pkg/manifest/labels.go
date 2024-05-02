@@ -22,12 +22,22 @@ func (l Labels) Get(key string) string {
 	return l[key]
 }
 
+func (l Labels) Slice() sort.StringSlice {
+	if l == nil {
+		return nil
+	}
+
+	labels := make(sort.StringSlice, 0, len(l))
+	for r := range l {
+		labels = append(labels, r)
+	}
+
+	return labels
+}
+
 // Format writes string representation of the [SelectorRule] into the provided sb.
 func (l Labels) Format(sb *strings.Builder) {
-	labelsKey := make(sort.StringSlice, 0, len(l))
-	for key := range l {
-		labelsKey = append(labelsKey, key)
-	}
+	labelsKey := l.Slice()
 	// Provides stable order for keys in the map
 	labelsKey.Sort()
 
@@ -83,7 +93,7 @@ type SelectorRule struct {
 
 type SelectorRules []SelectorRule
 
-// Format writes string representation of the [SelectorRule] into the provided sb.
+// Format writes string representation of the [SelectorRule]s into the provided string builder sb.
 func (s SelectorRule) Format(sb *strings.Builder) error {
 	switch s.Op {
 	case LabelSelectorOpExists:
@@ -94,7 +104,10 @@ func (s SelectorRule) Format(sb *strings.Builder) error {
 	case LabelSelectorOpIn:
 		sb.WriteString(s.Key)
 		sb.WriteString(" in (")
-		for _, value := range s.Values {
+		for i, value := range s.Values {
+			if i != 0 {
+				sb.WriteString(",")
+			}
 			sb.WriteString(value)
 		}
 		sb.WriteString(")")
@@ -103,7 +116,7 @@ func (s SelectorRule) Format(sb *strings.Builder) error {
 		sb.WriteString(" notin (")
 		for i, value := range s.Values {
 			if i != 0 {
-				sb.WriteString(", ")
+				sb.WriteString(",")
 			}
 			sb.WriteString(value)
 		}
@@ -139,13 +152,13 @@ type LabelSelector struct {
 //				{ Key: "unit", Op: LabelSelectorOpExists },
 //				{ Key: "version", Op: LabelSelectorOpNotIn, Values: []string{"0.9-dev", "0.8-pre"} },
 //			},
-//	}.AsLabels()
+//	    }.AsLabels()
 //
 // ```
 //
 // Produces:
 // ```
-// "env=dev,tier=fe,unit,version notin (0.9-dev, 0.8-pre)"
+// "env=dev,tier=fe,unit,version notin (0.9-dev,0.8-pre)"
 // ```
 func (ls LabelSelector) AsLabels() (string, error) {
 	sb := strings.Builder{}

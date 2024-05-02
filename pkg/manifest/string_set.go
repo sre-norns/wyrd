@@ -18,11 +18,19 @@ func (s StringSet) Any() (string, bool) {
 	return zeroValue, false
 }
 
-func (s StringSet) Join(sep string) string {
+func (s StringSet) Slice() []string {
+	if s == nil {
+		return nil
+	}
+
 	l := make([]string, 0, len(s))
 	for key := range s {
 		l = append(l, key)
 	}
 
-	return strings.Join(l, sep)
+	return l
+}
+
+func (s StringSet) Join(sep string) string {
+	return strings.Join(s.Slice(), sep)
 }
