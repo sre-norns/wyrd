@@ -34,7 +34,7 @@ type DBStore struct {
 	config Config
 }
 
-func NewDBStore(db *gorm.DB, cfg Config) (Store, error) {
+func NewDBStore(db *gorm.DB, cfg Config) (TransitionalStore, error) {
 	if db == nil {
 		return nil, ErrNoDBObject
 	}
@@ -108,15 +108,24 @@ func limitTimeRange(tx *gorm.DB, column string, from time.Time, till time.Time) 
 	return tx
 }
 
-func (s *DBStore) Create(ctx context.Context, value any, options ...Option) error {
-	return applyOptions(s.db.WithContext(ctx), value, options...).Create(value).Error
+func (s *DBStore) singleTransaction(ctx context.Context) *gormStoreTransaction {
+	return &gormStoreTransaction{
+		db:     s.db.WithContext(ctx),
+		config: s.config,
+	}
 }
 
-// func (s *DBStore) Upsert(ctx context.Context, value any, options ...Option) error {
-// 	tx := applyOptions(s.db.WithContext(ctx), value, options...)
+func (s *DBStore) Begin(ctx context.Context) (StoreTransaction, error) {
+	tx := s.db.WithContext(ctx).Begin()
+	return &gormStoreTransaction{
+		db:     tx,
+		config: s.config,
+	}, tx.Error
+}
 
-// 	return tx.Save(value).Error
-// }
+func (s *DBStore) Create(ctx context.Context, value any, options ...Option) error {
+	return s.singleTransaction(ctx).Create(value, options...)
+}
 
 func (s *DBStore) FindLinked(ctx context.Context, dest any, link string, owner any, searchQuery manifest.SearchQuery, options ...Option) error {
 	tx := applyOptions(s.db.Model(owner).WithContext(ctx), dest, options...)
@@ -129,21 +138,15 @@ func (s *DBStore) FindLinked(ctx context.Context, dest any, link string, owner a
 }
 
 func (s *DBStore) AddLinked(ctx context.Context, value any, link string, owner any, options ...Option) error {
-	return applyOptions(s.db.Model(owner).WithContext(ctx), value, options...).Association(link).Append(value)
+	return s.singleTransaction(ctx).AddLinked(value, link, owner, options...)
 }
 
 func (s *DBStore) RemoveLinked(ctx context.Context, value any, link string, owner any) error {
-	// return s.db.WithContext(ctx).Model(owner).Where(fmt.Sprintf("%s = ?", s.config.VersionColumnName), id.Version).Association(link).Delete(value)
-	return s.db.WithContext(ctx).Model(owner).Association(link).Delete(value)
+	return s.singleTransaction(ctx).AddLinked(value, link, owner)
 }
 
 func (s *DBStore) Get(ctx context.Context, dest any, id manifest.ResourceID, options ...Option) (bool, error) {
-	tx := applyOptions(s.db.WithContext(ctx), dest, options...)
-	tx = tx.First(dest, id)
-	if errors.Is(tx.Error, gorm.ErrRecordNotFound) {
-		return false, nil
-	}
-	return tx.RowsAffected == 1, tx.Error
+	return s.singleTransaction(ctx).Get(dest, id, options...)
 }
 
 func (s *DBStore) GetWithVersion(ctx context.Context, dest any, id manifest.VersionedResourceID, options ...Option) (bool, error) {
@@ -155,20 +158,12 @@ func (s *DBStore) GetWithVersion(ctx context.Context, dest any, id manifest.Vers
 	return tx.RowsAffected == 1, tx.Error
 }
 
-func (s *DBStore) Update(ctx context.Context, value any, id manifest.VersionedResourceID) (bool, error) {
-	tx := s.db.WithContext(ctx).Where(fmt.Sprintf("%s = ?", s.config.VersionColumnName), id.Version).Save(value)
-	if errors.Is(tx.Error, gorm.ErrRecordNotFound) {
-		return false, nil
-	}
-	return tx.RowsAffected == 1, tx.Error
+func (s *DBStore) Update(ctx context.Context, value any, id manifest.VersionedResourceID, options ...Option) (bool, error) {
+	return s.singleTransaction(ctx).Update(value, id, options...)
 }
 
 func (s *DBStore) Delete(ctx context.Context, value any, id manifest.VersionedResourceID) (bool, error) {
-	tx := s.db.WithContext(ctx).Where(fmt.Sprintf("%s = ?", s.config.VersionColumnName), id.Version).Delete(value, id.ID)
-	if errors.Is(tx.Error, gorm.ErrRecordNotFound) {
-		return false, nil
-	}
-	return tx.RowsAffected == 1, tx.Error
+	return s.singleTransaction(ctx).Delete(value, id)
 }
 
 func (s *DBStore) Find(ctx context.Context, resources any, searchQuery manifest.SearchQuery, options ...Option) (int64, error) {
