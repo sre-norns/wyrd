@@ -37,6 +37,9 @@ const (
 
 	// HTTPHeaderCacheControl is a standard [header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control) inform client about caching options for the response received
 	HTTPHeaderCacheControl = "Cache-Control"
+
+	// MimeTypeJson is the mime data type for JSON payload.
+	MimeTypeJson = gin.MIMEJSON
 )
 
 var (

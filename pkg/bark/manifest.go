@@ -120,3 +120,8 @@ func RequireVersionedResource(ctx *gin.Context) manifest.VersionedResourceID {
 func RequireVersionedResourceQuery(ctx *gin.Context) VersionQuery {
 	return ctx.MustGet(versionInfoKey).(VersionQuery)
 }
+
+// MaybeManifest writes a manifest resource into response if there was not error and resource exists
+func MaybeManifest(ctx *gin.Context, resource manifest.ResourceManifest, exists bool, err error) {
+	MaybeGotOne(ctx, resource, exists, err)
+}

@@ -169,7 +169,7 @@ func TestNewPaginatedResponse(t *testing.T) {
 			expect: bark.PaginatedResponse[testvalue]{
 				HResponse: bark.HResponse{
 					Links: map[string]bark.HLink{
-						"self": bark.HLink{
+						"self": {
 							Reference:    "location",
 							Relationship: "?",
 						},
@@ -199,7 +199,7 @@ func TestNewPaginatedResponse(t *testing.T) {
 				},
 				HResponse: bark.HResponse{
 					Links: map[string]bark.HLink{
-						"self": bark.HLink{
+						"self": {
 							Reference:    "location",
 							Relationship: "?",
 						},
