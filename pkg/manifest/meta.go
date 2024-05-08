@@ -1,6 +1,7 @@
 package manifest
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,7 +37,7 @@ var metaKindRegistry = map[Kind]reflect.Type{}
 // Note: it is an error to double register the same `kind`.
 func RegisterKind(kind Kind, proto any) error {
 	if _, know := metaKindRegistry[kind]; know {
-		return fmt.Errorf("Kind %q already registered", kind)
+		return fmt.Errorf("kind %q already registered", kind)
 	}
 
 	val := reflect.ValueOf(proto)
@@ -209,7 +210,10 @@ func UnmarshalJSONWithRegister(kind Kind, factory KindFactory, specData json.Raw
 		return nil, nil
 	}
 
-	err = json.Unmarshal(specData, spec)
+	decoder := json.NewDecoder(bytes.NewReader(specData))
+	decoder.DisallowUnknownFields()
+	err = decoder.Decode(spec)
+
 	return spec, err
 }
 

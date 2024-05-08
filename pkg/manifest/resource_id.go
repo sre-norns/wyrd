@@ -23,6 +23,11 @@ type ResourceID string
 // InvalidResourceID represents nil value of a [ResourceID] which does not referrers to any resource in a system.
 var InvalidResourceID ResourceID = ResourceID("")
 
+var (
+	ErrNilSpec         = fmt.Errorf("spec is nil")
+	ErrSpecTypeInvalid = fmt.Errorf("invalid spec type")
+)
+
 // String returns string representation of the [ResourceID] value
 // func (r ResourceID) String() string {
 // 	// return strconv.FormatInt(int64(r), 10)
@@ -49,12 +54,19 @@ func (r VersionedResourceID) String() string {
 	return fmt.Sprintf("%v@%d", r.ID, r.Version)
 }
 
+type Model interface {
+	GetKind() Kind
+	GetTypeMetadata() TypeMeta
+	GetMetadata() ObjectMeta
+	GetSpec() any
+}
+
 type ResourceModel[SpecType any] struct {
 	ObjectMeta `json:",inline" yaml:",inline"`
 	Spec       SpecType `json:"spec" yaml:"spec" gorm:"embedded"`
 }
 
-func (r *ResourceModel[SpecType]) ToManifest() ResourceManifest {
+func ToManifest[SpecType any](r ResourceModel[SpecType]) ResourceManifest {
 	spec := r.Spec
 	return ResourceManifest{
 		TypeMeta: TypeMeta{
@@ -67,11 +79,11 @@ func (r *ResourceModel[SpecType]) ToManifest() ResourceManifest {
 
 func ManifestAsResource[SpecType any](newEntry ResourceManifest) (ResourceModel[SpecType], error) {
 	if newEntry.Spec == nil {
-		return ResourceModel[SpecType]{}, fmt.Errorf("spec is nil")
+		return ResourceModel[SpecType]{}, ErrNilSpec
 	}
 	spec, ok := newEntry.Spec.(*SpecType)
 	if !ok {
-		return ResourceModel[SpecType]{}, fmt.Errorf("invalid spec type")
+		return ResourceModel[SpecType]{}, ErrSpecTypeInvalid
 	}
 
 	return ResourceModel[SpecType]{
