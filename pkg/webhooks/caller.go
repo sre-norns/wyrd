@@ -15,10 +15,10 @@ type Caller interface {
 }
 
 type HTTPCaller struct {
-	client http.Client
+	client *http.Client
 }
 
-func NewHTTPCaller(client http.Client) (Caller, error) {
+func NewHTTPCaller(client *http.Client) (Caller, error) {
 	return &HTTPCaller{
 		client: client,
 	}, nil

@@ -43,8 +43,6 @@ const (
 )
 
 var (
-	// ErrUnsupportedMediaType error indicates that [Content-Type](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Type) passed in a client request is not support by the API / endpoint.
-	ErrUnsupportedMediaType = fmt.Errorf("unsupported content type request")
 	// ErrInvalidAuthHeader error indicates incorrectly former [Authorization](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Authorization) header in the message.
 	ErrInvalidAuthHeader = fmt.Errorf("invalid Authorization header")
 	// ErrWrongKind error indicates that [manifest.Kind] passed to an endpoint is not expected by that endpoint.
@@ -52,6 +50,12 @@ var (
 
 	// ErrResourceNotFound represents error response when requested resource not found.
 	ErrResourceNotFound = &ErrorResponse{Code: http.StatusNotFound, Message: "requested resource not found"}
+
+	// ErrNotAcceptableMediaType error indicates that value(s) of [Accept](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept) headers passed by a client in a request are not support by the API / endpoint.
+	ErrNotAcceptableMediaType = &ErrorResponse{Code: http.StatusNotAcceptable, Message: "server cannot produce a response matching the list of acceptable values"}
+
+	// ErrUnsupportedMediaType error indicates that [Content-Type](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Type) passed in a client request is not support by the API / endpoint.
+	ErrUnsupportedMediaType = &ErrorResponse{Code: http.StatusUnsupportedMediaType, Message: "server refuses to accept the request because the payload format is in an unsupported format"}
 )
 
 // Lifted from GIN
@@ -86,7 +90,7 @@ func replyWithAcceptedType(c *gin.Context) (responseHandler, error) {
 
 	for _, contentType := range accepts {
 		switch contentType {
-		case "", "*/*", gin.MIMEJSON:
+		case "", "*", "*/*", gin.MIMEJSON:
 			return c.JSON, nil
 		case gin.MIMEYAML, "text/yaml", "application/yaml", "text/x-yaml":
 			return c.YAML, nil
@@ -95,7 +99,7 @@ func replyWithAcceptedType(c *gin.Context) (responseHandler, error) {
 		}
 	}
 
-	return nil, ErrUnsupportedMediaType
+	return nil, ErrNotAcceptableMediaType
 }
 
 // MarshalResponse selects appropriate resource marshaler based on [HTTPHeaderAccept] request header value and marshals response object.
@@ -162,13 +166,26 @@ func AbortWithError(ctx *gin.Context, code int, errValue error) {
 func ContentTypeAPI() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		// select response encoder base of accept-type:
-		marshalResponse, err := replyWithAcceptedType(ctx)
-		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, NewErrorResponse(http.StatusBadRequest, err))
+		if marshalResponse, err := replyWithAcceptedType(ctx); err != nil {
+			ctx.AbortWithStatusJSON(http.StatusNotAcceptable, err)
+			return
+		} else {
+			ctx.Set(responseMarshalKey, marshalResponse)
+		}
+
+		ctx.Next()
+	}
+}
+
+// AcceptContentTypeAPI returns middleware to limit content-type [HTTPHeaderAccept] values accepted by the server.
+func AcceptContentTypeAPI(accept ...string) gin.HandlerFunc {
+	acceptable := manifest.NewStringSet(accept...)
+	return func(ctx *gin.Context) {
+		if !acceptable.Has(ctx.ContentType()) {
+			ctx.AbortWithStatusJSON(http.StatusUnsupportedMediaType, ErrUnsupportedMediaType)
 			return
 		}
 
-		ctx.Set(responseMarshalKey, marshalResponse)
 		ctx.Next()
 	}
 }
@@ -182,16 +199,16 @@ func SearchableAPI(defaultPaginationLimit uint) gin.HandlerFunc {
 			searchParams.PageSize = defaultPaginationLimit
 		}
 
-		searchQuery, err := searchParams.BuildQuery(defaultPaginationLimit)
-		if err != nil {
+		if searchQuery, err := searchParams.BuildQuery(defaultPaginationLimit); err != nil {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, NewErrorResponse(http.StatusBadRequest, fmt.Errorf("bad search query: %w", err)))
 			return
+		} else {
+			searchParams.Pagination = searchParams.Pagination.ClampLimit(defaultPaginationLimit)
+
+			ctx.Set(searchQueryParamsKey, searchParams)
+			ctx.Set(searchQueryKey, searchQuery)
 		}
 
-		searchParams.Pagination = searchParams.Pagination.ClampLimit(defaultPaginationLimit)
-
-		ctx.Set(searchQueryParamsKey, searchParams)
-		ctx.Set(searchQueryKey, searchQuery)
 		ctx.Next()
 	}
 }
@@ -230,13 +247,13 @@ func extractAuthBearer(ctx *gin.Context) (string, error) {
 // See [RequireBearerToken] for information on how to access the token.
 func AuthBearerAPI() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		token, err := extractAuthBearer(ctx)
-		if err != nil {
+		if token, err := extractAuthBearer(ctx); err != nil {
 			AbortWithError(ctx, http.StatusUnauthorized, err)
 			return
+		} else {
+			ctx.Set(authBearerKey, token)
 		}
 
-		ctx.Set(authBearerKey, token)
 		ctx.Next()
 	}
 }

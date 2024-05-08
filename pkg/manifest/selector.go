@@ -49,15 +49,10 @@ func NewRequirement(key, op string, values []string) (Requirement, error) {
 		return Requirement{}, fmt.Errorf("%w: %v", ErrInvalidOperator, op)
 	}
 
-	valSet := make(StringSet)
-	for _, v := range values {
-		valSet[v] = struct{}{}
-	}
-
 	return Requirement{
 		key:      key,
 		operator: Operator(op),
-		values:   valSet,
+		values:   NewStringSet(values...),
 	}, nil
 }
 

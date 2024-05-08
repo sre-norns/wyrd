@@ -75,9 +75,10 @@ func ResourceAPI() gin.HandlerFunc {
 		if err := ctx.BindUri(&resourceRequest); err != nil {
 			AbortWithError(ctx, http.StatusNotFound, err)
 			return
+		} else {
+			ctx.Set(resourceIDKey, resourceRequest)
 		}
 
-		ctx.Set(resourceIDKey, resourceRequest)
 		ctx.Next()
 	}
 }

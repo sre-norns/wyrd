@@ -4,6 +4,16 @@ import "strings"
 
 type StringSet map[string]struct{}
 
+func NewStringSet(values ...string) StringSet {
+	result := make(StringSet, len(values))
+
+	for _, value := range values {
+		result[value] = struct{}{}
+	}
+
+	return result
+}
+
 func (s StringSet) Has(value string) bool {
 	_, ok := s[value]
 	return ok
