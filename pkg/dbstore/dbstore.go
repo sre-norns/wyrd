@@ -8,6 +8,7 @@ import (
 
 	"github.com/sre-norns/wyrd/pkg/manifest"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var (
@@ -127,14 +128,17 @@ func (s *DBStore) Create(ctx context.Context, value any, options ...Option) erro
 	return s.singleTransaction(ctx).Create(value, options...)
 }
 
-func (s *DBStore) FindLinked(ctx context.Context, dest any, link string, owner any, searchQuery manifest.SearchQuery, options ...Option) error {
+func (s *DBStore) FindLinked(ctx context.Context, dest any, link string, owner any, searchQuery manifest.SearchQuery, options ...Option) (totalCount int64, err error) {
 	tx := applyOptions(s.db.Model(owner).WithContext(ctx), dest, options...)
-	tx, err := withSelector(tx, s.config.LabelsColumnName, searchQuery)
+	tx, err = withSelector(tx, s.config.LabelsColumnName, searchQuery)
 	if err != nil {
-		return err
+		return
 	}
 
-	return tx.Association(link).Find(dest)
+	association := tx.Association(link)
+	err = association.Find(dest)
+
+	return association.Count(), err
 }
 
 func (s *DBStore) AddLinked(ctx context.Context, value any, link string, owner any, options ...Option) error {
@@ -173,7 +177,11 @@ func (s *DBStore) Find(ctx context.Context, resources any, searchQuery manifest.
 		return 0, err
 	}
 
-	rtx := tx.Order(s.config.CreatedAtColumnName).Find(resources)
+	rtx := tx.Order(
+		clause.OrderByColumn{
+			Column: clause.Column{Name: s.config.CreatedAtColumnName},
+			Desc:   true,
+		}).Find(resources)
 
 	// log.Print("[DEBUG] SQL: ", tx.ToSQL(func(tx *gorm.DB) *gorm.DB {
 	// 	for _, c := range qs {

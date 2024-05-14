@@ -37,15 +37,16 @@ func Expand(value string, searchQuery manifest.SearchQuery) Option {
 // Store interface defines for manifest.ResourceModel storage
 type Store interface {
 	Create(ctx context.Context, value any, options ...Option) error
-	Find(ctx context.Context, dest any, searchQuery manifest.SearchQuery, options ...Option) (count int64, err error)
 	Get(ctx context.Context, value any, id manifest.ResourceID, options ...Option) (exists bool, err error)
 	GetWithVersion(ctx context.Context, dest any, id manifest.VersionedResourceID, options ...Option) (bool, error)
 	Update(ctx context.Context, newValue any, id manifest.VersionedResourceID, options ...Option) (exists bool, err error)
 	Delete(ctx context.Context, model any, id manifest.VersionedResourceID) (existed bool, err error)
 
 	AddLinked(ctx context.Context, value any, link string, owner any, options ...Option) error
-	FindLinked(ctx context.Context, dest any, link string, owner any, searchQuery manifest.SearchQuery, options ...Option) error
 	RemoveLinked(ctx context.Context, value any, link string, owner any) error
+
+	Find(ctx context.Context, dest any, searchQuery manifest.SearchQuery, options ...Option) (count int64, err error)
+	FindLinked(ctx context.Context, dest any, link string, owner any, searchQuery manifest.SearchQuery, options ...Option) (totalCount int64, err error)
 
 	FindNames(ctx context.Context, model any, searchQuery manifest.SearchQuery, options ...Option) (manifest.Labels, error)
 	FindLabels(ctx context.Context, model any, searchQuery manifest.SearchQuery, options ...Option) (manifest.Labels, error)
