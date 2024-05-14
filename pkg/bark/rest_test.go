@@ -139,22 +139,23 @@ func TestPagination_ClampLimit(t *testing.T) {
 }
 
 func TestNewPaginatedResponse(t *testing.T) {
-	type testvalue struct {
+	type testValue struct {
 		value string
 	}
 	type paginationInputs struct {
-		items          []testvalue
+		items          []testValue
+		totalCount     int
 		paginationInfo bark.Pagination
 		options        []bark.HResponseOption
 	}
 
 	testCases := map[string]struct {
 		given  paginationInputs
-		expect bark.PaginatedResponse[testvalue]
+		expect bark.PaginatedResponse[testValue]
 	}{
 		"nil-value": {
 			given:  paginationInputs{},
-			expect: bark.PaginatedResponse[testvalue]{},
+			expect: bark.PaginatedResponse[testValue]{},
 		},
 		"nil-value-with-options": {
 			given: paginationInputs{
@@ -166,7 +167,7 @@ func TestNewPaginatedResponse(t *testing.T) {
 					),
 				},
 			},
-			expect: bark.PaginatedResponse[testvalue]{
+			expect: bark.PaginatedResponse[testValue]{
 				HResponse: bark.HResponse{
 					Links: map[string]bark.HLink{
 						"self": {
@@ -177,9 +178,26 @@ func TestNewPaginatedResponse(t *testing.T) {
 				},
 			},
 		},
+		"collection-pages": {
+			given: paginationInputs{
+				totalCount: 100500,
+				items: []testValue{
+					{value: "1"},
+					{value: "something"},
+				},
+			},
+			expect: bark.PaginatedResponse[testValue]{
+				Total: 100500,
+				Count: 2,
+				Data: []testValue{
+					{value: "1"},
+					{value: "something"},
+				},
+			},
+		},
 		"collection-with-options": {
 			given: paginationInputs{
-				items: []testvalue{
+				items: []testValue{
 					{value: "1"},
 					{value: "something"},
 				},
@@ -191,9 +209,9 @@ func TestNewPaginatedResponse(t *testing.T) {
 					),
 				},
 			},
-			expect: bark.PaginatedResponse[testvalue]{
+			expect: bark.PaginatedResponse[testValue]{
 				Count: 2,
-				Data: []testvalue{
+				Data: []testValue{
 					{value: "1"},
 					{value: "something"},
 				},
@@ -212,7 +230,7 @@ func TestNewPaginatedResponse(t *testing.T) {
 	for name, tc := range testCases {
 		test := tc
 		t.Run(name, func(t *testing.T) {
-			got := bark.NewPaginatedResponse(test.given.items, test.given.paginationInfo, test.given.options...)
+			got := bark.NewPaginatedResponse(test.given.items, test.given.totalCount, test.given.paginationInfo, test.given.options...)
 
 			require.Equal(t, test.expect, got)
 		})

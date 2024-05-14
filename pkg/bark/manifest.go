@@ -126,3 +126,14 @@ func RequireVersionedResourceQuery(ctx *gin.Context) VersionQuery {
 func MaybeManifest(ctx *gin.Context, resource manifest.ResourceManifest, exists bool, err error) {
 	MaybeGotOne(ctx, resource, exists, err)
 }
+
+// MaybeResourceCreated is a shortcut to handle 201/Created response.
+// It sets status code to [http.StatusCreated] and adds proper `Location` header to response headers.
+func MaybeResourceCreated(ctx *gin.Context, resource manifest.ResourceManifest, err error) {
+	if err != nil {
+		AbortWithError(ctx, http.StatusBadRequest, err)
+		return
+	}
+
+	ReplyResourceCreated(ctx, resource.Metadata.UID, resource)
+}

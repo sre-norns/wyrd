@@ -129,19 +129,19 @@ func MaybeGotOne(ctx *gin.Context, resource any, exists bool, err error) {
 }
 
 // Found is a shortcut to produce 200/Ok response for paginated data using [NewPaginatedResponse] to wrap items into Pagination frame.
-func Found[T any](ctx *gin.Context, results []T, options ...HResponseOption) {
+func Found[T any](ctx *gin.Context, results []T, total int, options ...HResponseOption) {
 	searchParams := RequireSearchQueryParams(ctx)
-	MarshalResponse(ctx, http.StatusOK, NewPaginatedResponse(results, searchParams.Pagination, options...))
+	MarshalResponse(ctx, http.StatusOK, NewPaginatedResponse(results, total, searchParams.Pagination, options...))
 }
 
 // FoundOrNot checks error value and response with error or using [Found] function if no error.
-func FoundOrNot[T any](ctx *gin.Context, err error, results []T, options ...HResponseOption) {
+func FoundOrNot[T any](ctx *gin.Context, err error, results []T, total int, options ...HResponseOption) {
 	if err != nil {
 		AbortWithError(ctx, http.StatusBadRequest, err)
 		return
 	}
 
-	Found[T](ctx, results, options...)
+	Found[T](ctx, results, total, options...)
 }
 
 // ReplyResourceCreated is a shortcut to handle 201/Created response.
