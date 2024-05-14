@@ -13,3 +13,12 @@ func FatalOnError(err error) {
 		log.Fatal(err)
 	}
 }
+
+// SuccessRequired is similar to [FatalOnError] in that it checks if error passed is not nil,
+// and logs error with description prefixing the error message and Exit(1)
+// It does nothing if err is nil.
+func SuccessRequired(err error, description string) {
+	if err != nil && !errors.Is(err, context.Canceled) {
+		log.Fatalf("%s: %v", description, err)
+	}
+}
