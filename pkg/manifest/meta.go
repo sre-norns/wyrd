@@ -167,19 +167,18 @@ func (m ObjectMeta) GetVersionedID() VersionedResourceID {
 	}
 }
 
-// ResourceManifest is an implementation of custom resource definition.
+// ResourceManifest is a Custom Resource Definition.
 type ResourceManifest struct {
 	TypeMeta `json:",inline" yaml:",inline"`
 	Metadata ObjectMeta `json:"metadata" yaml:"metadata"`
 	Spec     any        `json:"-" yaml:"-"`
+
+	// Links is not a part of CRD spec, but part of semantic model, it defines actions applicable to this model
+	HResponse `json:",inline" yaml:",inline"`
 }
 
 // MarshalJSON is an implementation of golang [encoding/json.Marshaler] interface
 func (s ResourceManifest) MarshalJSON() ([]byte, error) {
-	// if s.Metadata.UUID == InvalidResourceID {
-	// 	s.Metadata.UUID = nil
-	// }
-
 	return json.Marshal(&struct {
 		TypeMeta `json:",inline"`
 		Metadata ObjectMeta `json:"metadata"`

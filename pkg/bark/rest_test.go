@@ -43,15 +43,15 @@ func Test_NewErrorResponse(t *testing.T) {
 				Status: 200,
 				Error:  nil,
 				Options: []bark.HResponseOption{
-					bark.WithLink("details", bark.HLink{Reference: "321", Relationship: "xyz"}),
+					bark.WithLink("details", manifest.HLink{Reference: "321", Relationship: "xyz"}),
 				},
 			},
 			expect: &bark.ErrorResponse{
 				Code:    200,
 				Message: "",
 
-				HResponse: bark.HResponse{
-					Links: map[string]bark.HLink{
+				HResponse: manifest.HResponse{
+					Links: map[string]manifest.HLink{
 						"details": {
 							Reference:    "321",
 							Relationship: "xyz",
@@ -160,7 +160,7 @@ func TestNewPaginatedResponse(t *testing.T) {
 		"nil-value-with-options": {
 			given: paginationInputs{
 				options: []bark.HResponseOption{
-					bark.WithLink("self", bark.HLink{
+					bark.WithLink("self", manifest.HLink{
 						Reference:    "location",
 						Relationship: "?",
 					},
@@ -168,8 +168,8 @@ func TestNewPaginatedResponse(t *testing.T) {
 				},
 			},
 			expect: bark.PaginatedResponse[testValue]{
-				HResponse: bark.HResponse{
-					Links: map[string]bark.HLink{
+				HResponse: manifest.HResponse{
+					Links: map[string]manifest.HLink{
 						"self": {
 							Reference:    "location",
 							Relationship: "?",
@@ -202,7 +202,7 @@ func TestNewPaginatedResponse(t *testing.T) {
 					{value: "something"},
 				},
 				options: []bark.HResponseOption{
-					bark.WithLink("self", bark.HLink{
+					bark.WithLink("self", manifest.HLink{
 						Reference:    "location",
 						Relationship: "?",
 					},
@@ -215,8 +215,8 @@ func TestNewPaginatedResponse(t *testing.T) {
 					{value: "1"},
 					{value: "something"},
 				},
-				HResponse: bark.HResponse{
-					Links: map[string]bark.HLink{
+				HResponse: manifest.HResponse{
+					Links: map[string]manifest.HLink{
 						"self": {
 							Reference:    "location",
 							Relationship: "?",

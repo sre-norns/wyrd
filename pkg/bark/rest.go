@@ -41,16 +41,6 @@ type (
 
 // API Response types
 type (
-	// HLink is a struct to hold semantic web links, representing action that can be performed on response item
-	HLink struct {
-		Reference    string `form:"ref" json:"ref" yaml:"ref" xml:"ref"`
-		Relationship string `form:"rel" json:"rel" yaml:"rel" xml:"rel"`
-	}
-
-	// HResponse is a response object, produced by a server that has semantic references
-	HResponse struct {
-		Links map[string]HLink `form:"_links" json:"_links,omitempty" yaml:"_links,omitempty" xml:"_links"`
-	}
 
 	// PaginatedResponse represents common frame used to produce response that returns a collection of results
 	PaginatedResponse[T any] struct {
@@ -58,8 +48,8 @@ type (
 		Count int `form:"count" json:"count,omitempty" yaml:"count,omitempty" xml:"count"`
 		Data  []T `form:"data" json:"data,omitempty" yaml:"data,omitempty" xml:"data"`
 
-		HResponse  `form:",inline" json:",inline" yaml:",inline"`
-		Pagination `form:",inline" json:",inline" yaml:",inline"`
+		manifest.HResponse `form:",inline" json:",inline" yaml:",inline"`
+		Pagination         `form:",inline" json:",inline" yaml:",inline"`
 	}
 
 	// ErrorResponse represents a single error response with human readable reason and a code.
@@ -70,7 +60,7 @@ type (
 		// Human readable representation of the error, suitable for display
 		Message string
 
-		HResponse `form:",inline" json:",inline" yaml:",inline"`
+		manifest.HResponse `form:",inline" json:",inline" yaml:",inline"`
 	}
 
 	// StatusResponse represents ready state / healthcheck response
@@ -86,17 +76,17 @@ type (
 )
 
 // HResponseOption defines a type of 'optional' function that modifies HResponse properties when a new HResponse is constructed
-type HResponseOption func(r *HResponse)
+type HResponseOption func(r *manifest.HResponse)
 
 // WithLink returns an [HResponseOption] option that adds a HATEOAS link to a response object
-func WithLink(role string, link HLink) HResponseOption {
-	return func(r *HResponse) {
+func WithLink(role string, link manifest.HLink) HResponseOption {
+	return func(r *manifest.HResponse) {
 		if r == nil {
 			return
 		}
 
 		if r.Links == nil {
-			r.Links = make(map[string]HLink)
+			r.Links = make(map[string]manifest.HLink)
 		}
 
 		r.Links[role] = link

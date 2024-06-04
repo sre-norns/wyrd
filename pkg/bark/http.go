@@ -131,6 +131,33 @@ func MaybeGotOne(ctx *gin.Context, resource any, exists bool, err error) {
 // Found is a shortcut to produce 200/Ok response for paginated data using [NewPaginatedResponse] to wrap items into Pagination frame.
 func Found[T any](ctx *gin.Context, results []T, total int, options ...HResponseOption) {
 	searchParams := RequireSearchQueryParams(ctx)
+
+	if ctx.Request.URL != nil {
+		options = append(options, WithLink("self", manifest.HLink{Reference: ctx.Request.URL.String()}))
+	}
+
+	// If not the first page: give link to previous
+	if searchParams.Page != 0 {
+		relURL := *ctx.Request.URL
+
+		query := relURL.Query()
+		query.Set("page", fmt.Sprint(searchParams.Page-1))
+		relURL.RawQuery = query.Encode()
+
+		options = append(options, WithLink("prev", manifest.HLink{Reference: relURL.String()}))
+	}
+
+	// If not the last page:
+	if len(results) > 0 && uint(len(results)) == searchParams.PageSize {
+		relURL := *ctx.Request.URL
+
+		query := relURL.Query()
+		query.Set("page", fmt.Sprint(searchParams.Page+1))
+		relURL.RawQuery = query.Encode()
+
+		options = append(options, WithLink("next", manifest.HLink{Reference: relURL.String()}))
+	}
+
 	MarshalResponse(ctx, http.StatusOK, NewPaginatedResponse(results, total, searchParams.Pagination, options...))
 }
 
@@ -148,6 +175,7 @@ func FoundOrNot[T any](ctx *gin.Context, err error, results []T, total int, opti
 // It sets status code to [http.StatusCreated] and adds proper `Location` header to response headers.
 func ReplyResourceCreated(ctx *gin.Context, id any, resource any) {
 	ctx.Header(HTTPHeaderLocation, fmt.Sprintf("%v/%v", ctx.Request.URL.Path, id))
+
 	MarshalResponse(ctx, http.StatusCreated, resource)
 }
 
@@ -195,8 +223,8 @@ func AcceptContentTypeAPI(accept ...string) gin.HandlerFunc {
 func SearchableAPI(defaultPaginationLimit uint) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var searchParams SearchParams
-		if ctx.ShouldBindQuery(&searchParams) != nil {
-			searchParams.PageSize = defaultPaginationLimit
+		if err := ctx.ShouldBindQuery(&searchParams); err != nil {
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, NewErrorResponse(http.StatusBadRequest, fmt.Errorf("bad search query: %w", err)))
 		}
 
 		if searchQuery, err := searchParams.BuildQuery(defaultPaginationLimit); err != nil {

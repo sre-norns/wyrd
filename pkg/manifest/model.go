@@ -64,6 +64,10 @@ type Model interface {
 type ResourceModel[SpecType any] struct {
 	ObjectMeta `json:",inline" yaml:",inline"`
 	Spec       SpecType `json:"spec" yaml:"spec" gorm:"embedded"`
+
+	// Part of semantic model - defines actions applicable to this model
+	HResponse `json:",inline" yaml:",inline" gorm:"-"`
+	// Links map[string]HLink `form:"_links" json:"_links,omitempty" yaml:"_links,omitempty" xml:"_links" gorm:"-"`
 }
 
 func ToManifest[SpecType any](r ResourceModel[SpecType]) ResourceManifest {

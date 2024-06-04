@@ -29,7 +29,7 @@ type (
 		manifest.VersionedResourceID `json:",inline" yaml:",inline"`
 
 		// Semantic actions
-		HResponse `form:",inline" json:",inline" yaml:",inline"`
+		manifest.HResponse `form:",inline" json:",inline" yaml:",inline"`
 	}
 )
 
@@ -123,17 +123,30 @@ func RequireVersionedResourceQuery(ctx *gin.Context) VersionQuery {
 }
 
 // MaybeManifest writes a manifest resource into response if there was not error and resource exists
-func MaybeManifest(ctx *gin.Context, resource manifest.ResourceManifest, exists bool, err error) {
+func MaybeManifest(ctx *gin.Context, resource manifest.ResourceManifest, exists bool, err error, options ...HResponseOption) {
+	// Apply options:
+	if exists && err == nil {
+		for _, o := range options {
+			o(&resource.HResponse)
+		}
+	}
+
 	MaybeGotOne(ctx, resource, exists, err)
 }
 
 // MaybeResourceCreated is a shortcut to handle 201/Created response.
 // It sets status code to [http.StatusCreated] and adds proper `Location` header to response headers.
-func MaybeResourceCreated(ctx *gin.Context, resource manifest.ResourceManifest, err error) {
+func MaybeResourceCreated(ctx *gin.Context, resource manifest.ResourceManifest, err error, options ...HResponseOption) {
 	if err != nil {
 		AbortWithError(ctx, http.StatusBadRequest, err)
 		return
 	}
 
+	// Apply options:
+	for _, o := range options {
+		o(&resource.HResponse)
+	}
+
+	// Setup 'Location' header and write response
 	ReplyResourceCreated(ctx, resource.Metadata.UID, resource)
 }
