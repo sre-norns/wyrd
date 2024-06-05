@@ -230,8 +230,9 @@ func (s *DBStore) FindLabels(ctx context.Context, model any, searchQuery manifes
 	var ls []rawJSONSQL
 
 	tx := limitedQuery(s.db.Model(model).WithContext(ctx), searchQuery)
+	// SELECT key, value FROM conversations, json_each(cast(conversations.labels as json));
 	tx = tx.Joins(fmt.Sprintf(", json_each(%s)", s.config.LabelsColumnName))
-	rtx := matchName(tx, "key", searchQuery).Distinct("key", "value").Scan(&ls)
+	rtx := matchName(tx, "key", searchQuery).Select("key", "value").Scan(&ls)
 
 	result := make(manifest.Labels, len(ls))
 	for _, l := range ls {

@@ -131,7 +131,7 @@ type ObjectMeta struct {
 
 	// Labels is map of string keys and values that can be used to organize and categorize
 	// (scope and select) resources.
-	Labels Labels `form:"labels,omitempty" json:"labels,omitempty" yaml:"labels,omitempty" xml:"labels,omitempty" gorm:"serializer:json"`
+	Labels Labels `form:"labels,omitempty" json:"labels,omitempty" yaml:"labels,omitempty" xml:"labels,omitempty" gorm:"serializer:json;type:json"`
 
 	// CreatedAt is time when the object was created on the server.
 	// It is populated by the system and clients may not set this value.
