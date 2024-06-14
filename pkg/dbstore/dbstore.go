@@ -116,6 +116,16 @@ func (s *DBStore) singleTransaction(ctx context.Context) *gormStoreTransaction {
 	}
 }
 
+func (s *DBStore) Ping(ctx context.Context) error {
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		return fmt.Errorf("failed to access DB interface: %w", err)
+	}
+
+	// TODO: Return connection stats for more info
+	return sqlDB.PingContext(ctx)
+}
+
 func (s *DBStore) Begin(ctx context.Context) (StoreTransaction, error) {
 	tx := s.db.WithContext(ctx).Begin()
 	return &gormStoreTransaction{

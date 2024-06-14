@@ -125,8 +125,8 @@ type SimpleSelector struct {
 	requirements []Requirement
 }
 
-func NewSelector(requirements ...Requirement) SimpleSelector {
-	return SimpleSelector{
+func NewSelector(requirements ...Requirement) *SimpleSelector {
+	return &SimpleSelector{
 		requirements: requirements,
 	}
 }

@@ -36,6 +36,8 @@ func Expand(value string, searchQuery manifest.SearchQuery) Option {
 
 // Store interface defines for manifest.ResourceModel storage
 type Store interface {
+	Ping(context.Context) error
+
 	Create(ctx context.Context, value any, options ...Option) error
 	Get(ctx context.Context, value any, id manifest.ResourceID, options ...Option) (exists bool, err error)
 	GetWithVersion(ctx context.Context, dest any, id manifest.VersionedResourceID, options ...Option) (bool, error)
