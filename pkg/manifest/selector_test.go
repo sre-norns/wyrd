@@ -7,11 +7,50 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func mockRequirement(t *testing.T, key, op string, values ...string) manifest.Requirement {
+func mockRequirement(t *testing.T, key string, op manifest.Operator, values ...string) manifest.Requirement {
 	req, err := manifest.NewRequirement(key, op, values)
 	require.NoError(t, err)
 
 	return req
+}
+
+func TestSimpleSelectorRules(t *testing.T) {
+	testCases := map[string]struct {
+		given            []manifest.Requirement
+		expectEmpty      bool
+		expectSelectable bool
+		expectRules      []manifest.Requirement
+	}{
+		"nils": {
+			given:            nil,
+			expectEmpty:      true,
+			expectSelectable: true,
+		},
+		"empty-req": {
+			given:            []manifest.Requirement{},
+			expectEmpty:      true,
+			expectSelectable: true,
+		},
+
+		"req-key-no-key": {
+			given: []manifest.Requirement{
+				mockRequirement(t, "test-key", manifest.Exists),
+			},
+
+			expectEmpty:      false,
+			expectSelectable: true,
+		},
+	}
+
+	for name, tc := range testCases {
+		test := tc
+		t.Run(name, func(t *testing.T) {
+			selector := manifest.NewSelector(test.given...)
+			_, selectable := selector.Requirements()
+			require.Equalf(t, test.expectEmpty, selector.Empty(), "Expect empty selector given requirements: %+v", test.given)
+			require.Equalf(t, test.expectSelectable, selectable, "Expect selectable given requirements: %+v", test.given)
+		})
+	}
 }
 
 func TestSimpleSelector(t *testing.T) {
@@ -59,7 +98,7 @@ func TestSimpleSelector(t *testing.T) {
 		"req-key-no-key": {
 			given: givenEx{
 				requirements: []manifest.Requirement{
-					mockRequirement(t, "test-key", string(manifest.Exists)),
+					mockRequirement(t, "test-key", manifest.Exists),
 				},
 				labels: manifest.Labels{},
 			},
@@ -68,7 +107,7 @@ func TestSimpleSelector(t *testing.T) {
 		"req-key-has-key": {
 			given: givenEx{
 				requirements: []manifest.Requirement{
-					mockRequirement(t, "test-key", string(manifest.Exists)),
+					mockRequirement(t, "test-key", manifest.Exists),
 				},
 				labels: manifest.Labels{
 					"test-key": "value",
@@ -79,7 +118,7 @@ func TestSimpleSelector(t *testing.T) {
 		"req-key-has-key31": {
 			given: givenEx{
 				requirements: []manifest.Requirement{
-					mockRequirement(t, "test-key", string(manifest.DoesNotExist)),
+					mockRequirement(t, "test-key", manifest.DoesNotExist),
 				},
 				labels: manifest.Labels{
 					"test-key": "value",
@@ -90,7 +129,7 @@ func TestSimpleSelector(t *testing.T) {
 		"req-key-has-key33": {
 			given: givenEx{
 				requirements: []manifest.Requirement{
-					mockRequirement(t, "test-key", string(manifest.Equals), "value"),
+					mockRequirement(t, "test-key", manifest.Equals, "value"),
 				},
 				labels: manifest.Labels{
 					"test-key": "value",
@@ -101,10 +140,61 @@ func TestSimpleSelector(t *testing.T) {
 		"req-key-has-key34": {
 			given: givenEx{
 				requirements: []manifest.Requirement{
-					mockRequirement(t, "test-key", string(manifest.DoesNotExist), "other-value"),
+					mockRequirement(t, "test-key", manifest.DoesNotExist, "other-value"),
 				},
 				labels: manifest.Labels{
 					"test-key": "value",
+				},
+			},
+			expect: false,
+		},
+		"req-union": {
+			given: givenEx{
+				requirements: []manifest.Requirement{
+					mockRequirement(t, "test-key", manifest.Equals, "value"),
+					mockRequirement(t, "test-key", manifest.In, "other-value", "value"),
+				},
+				labels: manifest.Labels{
+					"test-key": "value",
+				},
+			},
+			expect: true,
+		},
+		"req-exclusion": {
+			given: givenEx{
+				requirements: []manifest.Requirement{
+					mockRequirement(t, "test-key", manifest.Exists),
+					mockRequirement(t, "test-key", manifest.NotIn, "x", "y", "z"),
+				},
+				labels: manifest.Labels{
+					"test-key": "value",
+				},
+			},
+			expect: true,
+		},
+		"req-range": {
+			given: givenEx{
+				requirements: []manifest.Requirement{
+					mockRequirement(t, "test-key", manifest.Exists),
+					mockRequirement(t, "test-key", manifest.NotEquals, "goo-ga"),
+					mockRequirement(t, "test-key", manifest.GreaterThan, "32"),
+					mockRequirement(t, "test-key", manifest.LessThan, "35"),
+				},
+				labels: manifest.Labels{
+					"test-key": "33",
+				},
+			},
+			expect: true,
+		},
+		"req-out-of-range": {
+			given: givenEx{
+				requirements: []manifest.Requirement{
+					mockRequirement(t, "test-key", manifest.Exists),
+					mockRequirement(t, "test-key", manifest.GreaterThan, "32"),
+					mockRequirement(t, "test-key", manifest.LessThan, "35"),
+				},
+				labels: manifest.Labels{
+					"test-key": "1",
 				},
 			},
 			expect: false,

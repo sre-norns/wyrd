@@ -9,15 +9,16 @@ import (
 type Operator string
 
 const (
+	Exists       Operator = "exists"
 	DoesNotExist Operator = "!"
 	Equals       Operator = "="
 	DoubleEquals Operator = "=="
 	In           Operator = "in"
 	NotEquals    Operator = "!="
 	NotIn        Operator = "notin"
-	Exists       Operator = "exists"
-	GreaterThan  Operator = "gt"
-	LessThan     Operator = "lt"
+
+	GreaterThan Operator = "gt"
+	LessThan    Operator = "lt"
 )
 
 var ErrInvalidOperator = errors.New("invalid operator")
@@ -43,15 +44,15 @@ type Requirement struct {
 // Requirements Represents a collection of requirements.
 type Requirements []Requirement
 
-func NewRequirement(key, op string, values []string) (Requirement, error) {
+func NewRequirement(key string, op Operator, values []string) (Requirement, error) {
 	// TODO: Validate key
-	if !IsValidOperator(op) {
+	if !IsValidOperator(string(op)) {
 		return Requirement{}, fmt.Errorf("%w: %v", ErrInvalidOperator, op)
 	}
 
 	return Requirement{
 		key:      key,
-		operator: Operator(op),
+		operator: op,
 		values:   NewStringSet(values...),
 	}, nil
 }

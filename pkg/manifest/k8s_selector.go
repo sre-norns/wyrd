@@ -27,7 +27,7 @@ func (s *k8Selector) Requirements() (requirements Requirements, selectable bool)
 
 	results := make(Requirements, 0, len(rules))
 	for _, rule := range rules {
-		req, err := NewRequirement(rule.Key(), string(rule.Operator()), rule.Values().List())
+		req, err := NewRequirement(rule.Key(), Operator(rule.Operator()), rule.Values().List())
 		if err != nil {
 			return nil, false
 		}
