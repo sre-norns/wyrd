@@ -21,7 +21,10 @@ const (
 	LessThan    Operator = "lt"
 )
 
-var ErrInvalidOperator = errors.New("invalid operator")
+var (
+	ErrInvalidOperator           = errors.New("invalid operator")
+	ErrNonSelectableRequirements = errors.New("non-selectable requirements")
+)
 
 func IsValidOperator(op string) bool {
 	switch Operator(op) {

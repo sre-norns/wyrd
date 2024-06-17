@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/sre-norns/wyrd/pkg/manifest"
@@ -15,7 +16,6 @@ var (
 	ErrNoDBObject                  = fmt.Errorf("nil DB connection passed")
 	ErrUnexpectedSelectorOperator  = fmt.Errorf("unexpected requirements operator")
 	ErrNoRequirementsValueProvided = fmt.Errorf("no value for a requirement is provided")
-	ErrNonSelectableRequirements   = fmt.Errorf("non-selectable requirements")
 )
 
 type Config struct {
@@ -269,7 +269,7 @@ func withSelector(tx *gorm.DB, jcolumn string, query manifest.SearchQuery) (*gor
 
 	reqs, ok := query.Selector.Requirements()
 	if !ok { // Selector has no requirements, easy way out
-		return nil, ErrNonSelectableRequirements
+		return nil, manifest.ErrNonSelectableRequirements
 	}
 
 	qs := make([]*JSONQueryExpression, 0, len(reqs))
@@ -296,14 +296,27 @@ func withSelector(tx *gorm.DB, jcolumn string, query manifest.SearchQuery) (*gor
 			if !ok {
 				return nil, ErrNoRequirementsValueProvided
 			}
-			qs = append(qs, JSONQuery(jcolumn).GreaterThan(value, req.Key()))
+
+			rsValue, err := strconv.ParseInt(value, 10, 64)
+			if err != nil { // Selector has no requirements, easy way out
+				return nil, fmt.Errorf("%w: failed to parse value for key `%v` to compare with: %v", manifest.ErrNonSelectableRequirements, req.Key(), err)
+			} else {
+				fmt.Printf("selecting for GOAT: %v\n", rsValue)
+			}
+
+			qs = append(qs, JSONQuery(jcolumn).GreaterThan(rsValue, req.Key()))
 		case manifest.LessThan:
 			value, ok := req.Values().Any()
 			if !ok {
 				return nil, ErrNoRequirementsValueProvided
 			}
-			qs = append(qs, JSONQuery(jcolumn).LessThan(value, req.Key()))
 
+			rsValue, err := strconv.ParseInt(value, 10, 64)
+			if err != nil { // Selector has no requirements, easy way out
+				return nil, fmt.Errorf("%w: failed to parse value for key `%v` to compare with: %v", manifest.ErrNonSelectableRequirements, req.Key(), err)
+			}
+
+			qs = append(qs, JSONQuery(jcolumn).LessThan(rsValue, req.Key()))
 		case manifest.In:
 			qs = append(qs, JSONQuery(jcolumn).KeyIn(req.Key(), req.Values()))
 		case manifest.NotIn:

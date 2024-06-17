@@ -26,6 +26,7 @@ const (
 
 // JSONQueryExpression json query expression, implements clause.Expression interface to use as querier
 type JSONQueryExpression struct {
+	asType  string
 	column  string
 	keys    []string
 	hasKeys bool
@@ -83,10 +84,12 @@ func (jsonQuery *JSONQueryExpression) NotEquals(value any, keys ...string) *JSON
 }
 
 func (jsonQuery *JSONQueryExpression) GreaterThan(value any, keys ...string) *JSONQueryExpression {
+	jsonQuery.asType = "int"
 	return jsonQuery.setOp(greaterThan, value, keys...)
 }
 
 func (jsonQuery *JSONQueryExpression) LessThan(value any, keys ...string) *JSONQueryExpression {
+	jsonQuery.asType = "int"
 	return jsonQuery.setOp(lessThan, value, keys...)
 }
 
@@ -162,13 +165,21 @@ func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
 			}
 		case len(jsonQuery.op) > 0:
 			if len(jsonQuery.keys) > 0 {
+				if jsonQuery.asType != "" {
+					builder.WriteString("cast(")
+				}
+
 				builder.WriteString("JSON_EXTRACT(")
 				builder.WriteQuoted(jsonQuery.column)
 				builder.WriteByte(',')
 				builder.AddVar(stmt, jsonQueryJoin(jsonQuery.keys))
 				builder.WriteString(")")
+				if jsonQuery.asType != "" {
+					builder.WriteString(fmt.Sprintf("as %v)", jsonQuery.asType))
+				}
 
 				builder.WriteString(string(jsonQuery.op))
+
 				if jsonQuery.groupOp {
 					idx := 0
 					builder.WriteString("(")
@@ -198,17 +209,31 @@ func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
 		case jsonQuery.hasKeys:
 			if len(jsonQuery.keys) > 0 {
 				stmt.WriteQuoted(jsonQuery.column)
-				stmt.WriteString("::jsonb")
-				for _, key := range jsonQuery.keys[0 : len(jsonQuery.keys)-1] {
-					stmt.WriteString(" -> ")
-					stmt.AddVar(builder, key)
+				stmt.WriteString("::json")
+
+				if len(jsonQuery.keys) == 1 {
+					// '{"a":1,"b":2}'::json ->> 'b' → 2
+					stmt.WriteString(" ->> ")
+					stmt.AddVar(builder, jsonQuery.keys[0])
+				} else {
+					// '{"a": {"b": ["foo","bar"]}}'::json #>> '{a,b,1}' → bar
+					stmt.WriteString(" #>> {")
+					for idx, key := range jsonQuery.keys {
+						if idx > 0 {
+							builder.WriteByte(',')
+						}
+						stmt.AddVar(builder, key)
+					}
+					stmt.WriteString("}")
 				}
 
-				stmt.WriteString(" ? ")
-				stmt.AddVar(builder, jsonQuery.keys[len(jsonQuery.keys)-1])
+				builder.WriteString(string(jsonQuery.keysOp))
 			}
 		case len(jsonQuery.op) > 0:
 			if len(jsonQuery.keys) > 0 {
+				if jsonQuery.asType != "" {
+					builder.WriteString("cast(")
+				}
 				builder.WriteString(fmt.Sprintf("json_extract_path_text(%v::json,", stmt.Quote(jsonQuery.column)))
 
 				for idx, key := range jsonQuery.keys {
@@ -217,7 +242,10 @@ func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
 					}
 					stmt.AddVar(builder, key)
 				}
-				builder.WriteString(") ")
+				builder.WriteString(")")
+				if jsonQuery.asType != "" {
+					builder.WriteString(fmt.Sprintf("as %v)", jsonQuery.asType))
+				}
 
 				builder.WriteString(string(jsonQuery.op))
 
