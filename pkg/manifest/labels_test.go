@@ -222,13 +222,8 @@ func TestLabelSelector_AsLabels(t *testing.T) {
 	for name, tc := range testCases {
 		test := tc
 		t.Run(name, func(t *testing.T) {
-			got, err := test.given.AsLabels()
-			if test.expectError {
-				require.Error(t, err, "expected error: %v", test.expectError)
-			} else {
-				require.NoError(t, err, "expected error: %v", test.expectError)
-				require.Equal(t, test.expect, got)
-			}
+			got := test.given.AsLabels()
+			require.Equal(t, test.expect, got)
 		})
 	}
 }
@@ -465,6 +460,195 @@ func TestParseSelector(t *testing.T) {
 			for _, cas := range test.subcases {
 				got := selector.Matches(cas.given)
 				require.Equalf(t, cas.expect, got, "Given labels: %+v, selector: %q", cas.given, test.given)
+			}
+		})
+	}
+}
+
+// ValidateLabelKeyPrefix
+//
+
+func TestValidateLabelKeyName(t *testing.T) {
+	testCases := map[string]struct {
+		given       string
+		expectError bool
+	}{
+		"empty": {
+			given:       "",
+			expectError: true,
+		},
+		"ok":           {given: "normal"},
+		"ok.with.dots": {given: "normal.name"},
+		"ok.with.-":    {given: "normal-name"},
+		"ok.with.mix":  {given: "0.normal-name"},
+		"ok.numbers":   {given: "0.normal"},
+		"too-long": {
+			given:       "averylong.0000000000000000000000000000000000000000000000000.name.i.have.no-idea.why.anyone-would0.even.type-it.no",
+			expectError: true,
+		},
+		"no-negatives": {
+			given:       "-name",
+			expectError: true,
+		},
+		"no-negatives-ends": {
+			given:       "name-",
+			expectError: true,
+		},
+		"no-negatives.ends": {
+			given:       "name.is-",
+			expectError: true,
+		},
+		"no-+":                {given: "name.+is", expectError: true},
+		"no-+start":           {given: "+name", expectError: true},
+		"no+end":              {given: "name+", expectError: true},
+		"no-space-end":        {given: "name ", expectError: true},
+		"no-space_around":     {given: " name ", expectError: true},
+		"no-space-in_between": {given: "name with spaces", expectError: true},
+		"no-space-start":      {given: " name", expectError: true},
+	}
+
+	for name, tc := range testCases {
+		test := tc
+		t.Run(name, func(t *testing.T) {
+			if test.expectError {
+				require.Error(t, manifest.ValidateLabelKeyName(test.given))
+			} else {
+				require.NoError(t, manifest.ValidateLabelKeyName(test.given))
+			}
+		})
+	}
+}
+
+func TestValidateLabelKey(t *testing.T) {
+	testCases := map[string]struct {
+		given       string
+		expectError bool
+	}{
+		"empty":        {given: "", expectError: true},
+		"ok":           {given: "normal"},
+		"ok.with.dots": {given: "normal.name"},
+		"ok.with.-":    {given: "normal-name"},
+		"ok.with.mix":  {given: "0.normal-name"},
+		"ok.numbers":   {given: "0.normal"},
+		"too-long": {
+			given:       "averylong.0000000000000000000000000000000000000000000000000.name.i.have.no-idea.why.anyone-would0.even.type-it.no",
+			expectError: true,
+		},
+		"no-negatives": {
+			given:       "-name",
+			expectError: true,
+		},
+		"no-negatives-ends": {
+			given:       "name-",
+			expectError: true,
+		},
+		"no-negatives.ends": {
+			given:       "name.is-",
+			expectError: true,
+		},
+		"no-+":                {given: "name.+is", expectError: true},
+		"no-+start":           {given: "+name", expectError: true},
+		"no+end":              {given: "name+", expectError: true},
+		"no-space-end":        {given: "name ", expectError: true},
+		"no-space_around":     {given: " name ", expectError: true},
+		"no-space-in_between": {given: "name with spaces", expectError: true},
+		"no-space-start":      {given: " name", expectError: true},
+
+		"simple/prefix":       {given: "prefix/name"},
+		"domain/prefix":       {given: "example.prefix.io/name"},
+		"domain/prefix+.name": {given: "example.prefix.io/name.meta"},
+
+		"simple/+prefix":  {given: "prefix/+name", expectError: true},
+		"domain/prefix+":  {given: "example.prefix.io/name+", expectError: true},
+		"domain/too-long": {given: "example.prefix.io/averylong.0000000000000000000000000000000000000000000000000.name.i.have.no-idea.why.anyone-would0.even.type-it.no", expectError: true},
+	}
+
+	for name, tc := range testCases {
+		test := tc
+		t.Run(name, func(t *testing.T) {
+			if test.expectError {
+				require.Error(t, manifest.ValidateLabelKey(test.given))
+			} else {
+				require.NoError(t, manifest.ValidateLabelKey(test.given))
+			}
+		})
+	}
+}
+
+func TestValidateLabelValue(t *testing.T) {
+	testCases := map[string]struct {
+		given       string
+		expectError bool
+	}{
+		"empty-value-ok":  {given: ""},
+		"simple-value-ok": {given: "value"},
+		"domain.name":     {given: "app.kubernetes.io"},
+		"numbers":         {given: "321"},
+
+		"no-negative-numbers?":   {given: "-321", expectError: true},
+		"no-spaces in between":   {given: "value with spaces", expectError: true},
+		"no-spaces at the start": {given: " value", expectError: true},
+		"no-spaces at the end":   {given: "value ", expectError: true},
+	}
+
+	for name, tc := range testCases {
+		test := tc
+		t.Run(name, func(t *testing.T) {
+			if test.expectError {
+				require.Error(t, manifest.ValidateLabelValue(test.given))
+			} else {
+				require.NoError(t, manifest.ValidateLabelValue(test.given))
+			}
+		})
+	}
+}
+
+func TestValidateLabels(t *testing.T) {
+	testCases := map[string]struct {
+		given       manifest.Labels
+		expectError bool
+	}{
+		"nil-value-valid": {given: nil},
+		"empty-value-ok": {
+			given: manifest.Labels{},
+		},
+		"just.key": {
+			given: manifest.Labels{
+				"key":                 "",
+				"app.k8s.io/key.name": "",
+			},
+		},
+		"numbers": {
+			given: manifest.Labels{
+				"app.k8s.io/version":                "321",
+				"app.k8s.io/version.1":              "321",
+				"app.k8s.io/version.semantic":       "1.2.3",
+				"app.k8s.io/version.semantic.build": "1.2.3-dev",
+			},
+		},
+
+		"space.values": {
+			given: manifest.Labels{
+				"key": "value with spaces",
+			},
+			expectError: true,
+		},
+		"partially-valid": {
+			given: manifest.Labels{
+				"key1": "valid",
+				"key":  "+invalid value",
+			},
+			expectError: true,
+		},
+	}
+
+	for name, tc := range testCases {
+		test := tc
+		t.Run(name, func(t *testing.T) {
+			if test.expectError {
+				require.Error(t, test.given.Validate())
+			} else {
+				require.NoError(t, test.given.Validate())
 			}
 		})
 	}

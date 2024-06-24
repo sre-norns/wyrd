@@ -1,7 +1,9 @@
 package manifest
 
 import (
+	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -33,6 +35,90 @@ func (l Labels) Slice() sort.StringSlice {
 	}
 
 	return labels
+}
+
+var labelRegexp = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_\.\-]*[a-zA-Z0-9]$`)
+
+func ValidateLabelKeyName(value string) error {
+	if value == "" {
+		return errors.New("key name can not be empty")
+	}
+
+	if len(value) > 63 {
+		return errors.New("key name is too long")
+	}
+
+	if !labelRegexp.MatchString(value) {
+		return errors.New("key `name` is not valid")
+	}
+
+	return nil
+}
+
+func ValidateLabelKeyPrefix(value string) error {
+	if len(value) > 253 {
+		return errors.New("key prefix is too long")
+	}
+
+	return nil
+}
+
+func ValidateLabelKey(value string) error {
+	if value == "" {
+		return errors.New("value can not be empty")
+	}
+
+	parts := strings.Split(value, "/")
+	if len(parts) > 2 {
+		return errors.New("key can not contain extra '/' in the name")
+	}
+
+	if len(parts) == 2 {
+		invalidPrefix := ValidateLabelKeyPrefix(parts[0])
+		invalidName := ValidateLabelKeyName(parts[1])
+		if invalidPrefix != nil && invalidName == nil {
+			return invalidPrefix
+		} else if invalidPrefix == nil && invalidName != nil {
+			return invalidName
+		} else if invalidPrefix != nil && invalidName != nil {
+			return fmt.Errorf("%w And %v", invalidPrefix, invalidName)
+		}
+
+		return nil
+	}
+
+	return ValidateLabelKeyName(parts[0])
+}
+
+func ValidateLabelValue(value string) error {
+	// Empty value is valid
+	if value == "" {
+		return nil
+	}
+
+	if len(value) > 63 {
+		return errors.New("value is too long")
+	}
+
+	if !labelRegexp.MatchString(value) {
+		return errors.New("value is not valid")
+	}
+
+	return nil
+}
+
+func (l Labels) Validate() error {
+	errs := []error{}
+	for key, value := range l {
+		if err := ValidateLabelKey(key); err != nil {
+			errs = append(errs, err)
+		}
+		if err := ValidateLabelValue(value); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return AsMultiErrorOrNil(errs...)
 }
 
 // Format writes string representation of the [SelectorRule] into the provided sb.
@@ -94,38 +180,20 @@ type SelectorRule struct {
 type SelectorRules []SelectorRule
 
 // Format writes string representation of the [SelectorRule]s into the provided string builder sb.
-func (s SelectorRule) Format(sb *strings.Builder) error {
+func (s SelectorRule) Format(sb *strings.Builder) {
 	switch s.Op {
 	case LabelSelectorOpExists:
 		sb.WriteString(s.Key)
 	case LabelSelectorOpDoesNotExist:
-		sb.WriteString("!")
+		sb.WriteString(string(DoesNotExist))
 		sb.WriteString(s.Key)
 	case LabelSelectorOpIn:
-		sb.WriteString(s.Key)
-		sb.WriteString(" in (")
-		for i, value := range s.Values {
-			if i != 0 {
-				sb.WriteString(",")
-			}
-			sb.WriteString(value)
-		}
-		sb.WriteString(")")
+		sb.WriteString(fmt.Sprintf("%v %v (%v)", s.Key, In, strings.Join(s.Values, ",")))
 	case LabelSelectorOpNotIn:
-		sb.WriteString(s.Key)
-		sb.WriteString(" notin (")
-		for i, value := range s.Values {
-			if i != 0 {
-				sb.WriteString(",")
-			}
-			sb.WriteString(value)
-		}
-		sb.WriteString(")")
+		sb.WriteString(fmt.Sprintf("%v %v (%v)", s.Key, NotIn, strings.Join(s.Values, ",")))
 	default:
-		return fmt.Errorf("unsupported op value: %q", s.Op)
+		sb.WriteString(fmt.Sprintf("%v %v (%v)", s.Key, s.Op, strings.Join(s.Values, ",")))
 	}
-
-	return nil
 }
 
 // LabelSelector is a part of a resource model that holds label-based requirements for another resource
@@ -160,7 +228,7 @@ type LabelSelector struct {
 // ```
 // "env=dev,tier=fe,unit,version notin (0.9-dev,0.8-pre)"
 // ```
-func (ls LabelSelector) AsLabels() (string, error) {
+func (ls LabelSelector) AsLabels() string {
 	sb := strings.Builder{}
 	ls.MatchLabels.Format(&sb)
 
@@ -169,10 +237,12 @@ func (ls LabelSelector) AsLabels() (string, error) {
 			sb.WriteRune(',')
 		}
 
-		if err := s.Format(&sb); err != nil {
-			return sb.String(), err
-		}
+		s.Format(&sb)
 	}
 
-	return sb.String(), nil
+	return sb.String()
+}
+
+func (ls LabelSelector) String() string {
+	return ls.AsLabels()
 }
