@@ -39,7 +39,7 @@ Once `"mySpec"` kind is registered, you can parse resource definitions:
         //... error handling
     }
 
-    var resourceDefinition wyrd.ResourceManifest
+    var resourceDefinition manifest.ResourceManifest
 	if err := yaml.Unmarshal(content, &resourceSpec); err != nil {
 		//... error handling
 	}

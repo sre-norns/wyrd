@@ -32,7 +32,7 @@ var metaKindRegistry = map[Kind]reflect.Type{}
 // Later, an instance of that 'kind' can be created using `InstanceOf`
 // Usage:
 // ```
-// obj, err := wyrd.RegisterKind(wyrd.Kind("mySpec"), &MySpec{})
+// obj, err := manifest.RegisterKind(manifest.Kind("mySpec"), &MySpec{})
 // ```
 // Note: it is an error to double register the same `kind`.
 func RegisterKind(kind Kind, proto any) error {
@@ -165,6 +165,26 @@ func (m ObjectMeta) GetVersionedID() VersionedResourceID {
 		ID:      m.UID,
 		Version: m.Version,
 	}
+}
+
+func (m ObjectMeta) Validate() error {
+	errs := ErrorSet{}
+
+	if m.Name != "" {
+		if err := ValidateSubdomainName(m.Name); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	if err := m.Labels.Validate(); err != nil {
+		if errSet, ok := err.(ErrorSet); ok {
+			errs = append(errs, errSet...)
+		} else {
+			errs = append(errs, err)
+		}
+	}
+
+	return errs.ErrorOrNil()
 }
 
 // ResourceManifest is a Custom Resource Definition.

@@ -33,6 +33,22 @@ func (e ErrorSet) Error() string {
 	return e.String()
 }
 
+func (e ErrorSet) ThisOrNil() ErrorSet {
+	if len(e) == 0 {
+		return nil
+	}
+
+	return e
+}
+
+func (e ErrorSet) ErrorOrNil() error {
+	if len(e) == 0 {
+		return nil
+	}
+
+	return e
+}
+
 func AsMultiErrorOrNil(e ...error) error {
 	if len(e) == 0 {
 		return nil

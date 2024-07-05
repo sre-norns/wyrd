@@ -37,7 +37,24 @@ func (l Labels) Slice() sort.StringSlice {
 	return labels
 }
 
+var subdomainNameRegexp = regexp.MustCompile(`^[a-z0-9]([a-z0-9\.\-]*[a-z0-9])?$`)
+
 var labelRegexp = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_\.\-]*[a-zA-Z0-9]$`)
+
+func ValidateSubdomainName(value string) error {
+	if len(value) > 253 {
+		return errors.New("name is too long")
+	}
+
+	// contain only lowercase alphanumeric characters, '-' or '.'
+	// start with an alphanumeric character
+	// end with an alphanumeric character
+	if !subdomainNameRegexp.MatchString(value) {
+		return errors.New("name is not a DNS subdomain name")
+	}
+
+	return nil
+}
 
 func ValidateLabelKeyName(value string) error {
 	if value == "" {
@@ -56,11 +73,7 @@ func ValidateLabelKeyName(value string) error {
 }
 
 func ValidateLabelKeyPrefix(value string) error {
-	if len(value) > 253 {
-		return errors.New("key prefix is too long")
-	}
-
-	return nil
+	return ValidateSubdomainName(value)
 }
 
 func ValidateLabelKey(value string) error {
@@ -108,7 +121,7 @@ func ValidateLabelValue(value string) error {
 }
 
 func (l Labels) Validate() error {
-	errs := []error{}
+	errs := ErrorSet{}
 	for key, value := range l {
 		if err := ValidateLabelKey(key); err != nil {
 			errs = append(errs, err)
@@ -118,7 +131,7 @@ func (l Labels) Validate() error {
 		}
 	}
 
-	return AsMultiErrorOrNil(errs...)
+	return errs.ErrorOrNil()
 }
 
 // Format writes string representation of the [SelectorRule] into the provided sb.

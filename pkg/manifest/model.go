@@ -59,6 +59,7 @@ type Model interface {
 	GetTypeMetadata() TypeMeta
 	GetMetadata() ObjectMeta
 	GetSpec() any
+	GetStatus() any
 }
 
 type ResourceModel[SpecType any] struct {
@@ -67,7 +68,12 @@ type ResourceModel[SpecType any] struct {
 
 	// Part of semantic model - defines actions applicable to this model
 	HResponse `json:",inline" yaml:",inline" gorm:"-"`
-	// Links map[string]HLink `form:"_links" json:"_links,omitempty" yaml:"_links,omitempty" xml:"_links" gorm:"-"`
+}
+
+type StatefulResource[SpecType, StatusType any] struct {
+	ResourceModel[SpecType] `json:",inline" yaml:",inline"`
+
+	Status StatusType `json:"status,omitempty" yaml:"status,omitempty" gorm:"embedded;embeddedPrefix:status_"`
 }
 
 func ToManifest[SpecType any](r ResourceModel[SpecType]) ResourceManifest {
@@ -85,6 +91,7 @@ func ManifestAsResource[SpecType any](newEntry ResourceManifest) (ResourceModel[
 	if newEntry.Spec == nil {
 		return ResourceModel[SpecType]{}, ErrNilSpec
 	}
+
 	spec, ok := newEntry.Spec.(*SpecType)
 	if !ok {
 		return ResourceModel[SpecType]{}, ErrSpecTypeInvalid

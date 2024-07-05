@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	wyrd "github.com/sre-norns/wyrd/pkg/manifest"
+	"github.com/sre-norns/wyrd/pkg/manifest"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
@@ -16,16 +16,16 @@ func TestManifestMarshaling_JSON(t *testing.T) {
 	}
 
 	testCases := map[string]struct {
-		given       wyrd.ResourceManifest
+		given       manifest.ResourceManifest
 		expect      string
 		expectError bool
 	}{
 		"nothing": {
-			given:  wyrd.ResourceManifest{},
+			given:  manifest.ResourceManifest{},
 			expect: `{"metadata":{"name":""}}`,
 		},
 		"min-spec": {
-			given: wyrd.ResourceManifest{
+			given: manifest.ResourceManifest{
 				Spec: &TestSpec{
 					Value: 1,
 					Name:  "life",
@@ -34,11 +34,11 @@ func TestManifestMarshaling_JSON(t *testing.T) {
 			expect: `{"metadata":{"name":""},"spec":{"value":1,"name":"life"}}`,
 		},
 		"basic": {
-			given: wyrd.ResourceManifest{
-				TypeMeta: wyrd.TypeMeta{
-					Kind: wyrd.Kind("testSpec"),
+			given: manifest.ResourceManifest{
+				TypeMeta: manifest.TypeMeta{
+					Kind: manifest.Kind("testSpec"),
 				},
-				Metadata: wyrd.ObjectMeta{
+				Metadata: manifest.ObjectMeta{
 					Name: "test-spec",
 				},
 				Spec: &TestSpec{
@@ -66,34 +66,34 @@ func TestManifestUnmarshaling_JSON(t *testing.T) {
 		Name  string `json:"name"`
 	}
 
-	testKind := wyrd.Kind("testSpec")
+	testKind := manifest.Kind("testSpec")
 
-	err := wyrd.RegisterKind(testKind, &TestSpec{})
+	err := manifest.RegisterKind(testKind, &TestSpec{})
 	require.NoError(t, err)
-	defer wyrd.UnregisterKind(testKind)
+	defer manifest.UnregisterKind(testKind)
 
 	testCases := map[string]struct {
 		given       string
-		expect      wyrd.ResourceManifest
+		expect      manifest.ResourceManifest
 		expectError bool
 	}{
 		"nothing": {
 			given:  `{"metadata":{"name":""}}`,
-			expect: wyrd.ResourceManifest{},
+			expect: manifest.ResourceManifest{},
 		},
 		"unknown-kind": {
 			given: `{"kind":"unknownSpec", "metadata":{"name":""},"spec":{"field":"xyz","desc":"unknown"}}`,
-			expect: wyrd.ResourceManifest{
-				TypeMeta: wyrd.TypeMeta{
-					Kind: wyrd.Kind("unknownSpec"),
+			expect: manifest.ResourceManifest{
+				TypeMeta: manifest.TypeMeta{
+					Kind: manifest.Kind("unknownSpec"),
 				},
-				Metadata: wyrd.ObjectMeta{},
+				Metadata: manifest.ObjectMeta{},
 				Spec:     map[string]any{"field": "xyz", "desc": "unknown"},
 			},
 		},
 		"min-spec": {
-			expect: wyrd.ResourceManifest{
-				TypeMeta: wyrd.TypeMeta{
+			expect: manifest.ResourceManifest{
+				TypeMeta: manifest.TypeMeta{
 					Kind: testKind,
 				},
 				Spec: &TestSpec{
@@ -104,11 +104,11 @@ func TestManifestUnmarshaling_JSON(t *testing.T) {
 			given: `{"kind":"testSpec", "metadata":{"name":""},"spec":{"value":1,"name":"life"}}`,
 		},
 		"basic": {
-			expect: wyrd.ResourceManifest{
-				TypeMeta: wyrd.TypeMeta{
+			expect: manifest.ResourceManifest{
+				TypeMeta: manifest.TypeMeta{
 					Kind: testKind,
 				},
-				Metadata: wyrd.ObjectMeta{
+				Metadata: manifest.ObjectMeta{
 					Name: "test-spec",
 				},
 				Spec: &TestSpec{
@@ -123,7 +123,7 @@ func TestManifestUnmarshaling_JSON(t *testing.T) {
 	for name, tc := range testCases {
 		test := tc
 		t.Run(name, func(t *testing.T) {
-			var got wyrd.ResourceManifest
+			var got manifest.ResourceManifest
 			err := json.Unmarshal([]byte(test.given), &got)
 			if test.expectError {
 				require.Error(t, err, "expected error: %v", test.expectError)
@@ -142,18 +142,18 @@ func TestManifestMarshaling_YAML(t *testing.T) {
 	}
 
 	testCases := map[string]struct {
-		given       wyrd.ResourceManifest
+		given       manifest.ResourceManifest
 		expect      string
 		expectError bool
 	}{
 		"nothing": {
-			given: wyrd.ResourceManifest{},
+			given: manifest.ResourceManifest{},
 			expect: `metadata:
     name: ""
 `,
 		},
 		"min-spec": {
-			given: wyrd.ResourceManifest{
+			given: manifest.ResourceManifest{
 				Spec: &TestSpec{
 					Value: 1,
 					Name:  "life",
@@ -167,11 +167,11 @@ spec:
 `,
 		},
 		"basic": {
-			given: wyrd.ResourceManifest{
-				TypeMeta: wyrd.TypeMeta{
-					Kind: wyrd.Kind("testSpec"),
+			given: manifest.ResourceManifest{
+				TypeMeta: manifest.TypeMeta{
+					Kind: manifest.Kind("testSpec"),
 				},
-				Metadata: wyrd.ObjectMeta{
+				Metadata: manifest.ObjectMeta{
 					Name: "test-spec",
 				},
 				Spec: &TestSpec{
@@ -205,23 +205,23 @@ func TestManifestUnmarshaling_YAML(t *testing.T) {
 		Name  string `json:"name"`
 	}
 
-	testKind := wyrd.Kind("testSpec")
+	testKind := manifest.Kind("testSpec")
 
-	err := wyrd.RegisterKind(testKind, &TestSpec{})
+	err := manifest.RegisterKind(testKind, &TestSpec{})
 	require.NoError(t, err)
-	defer wyrd.UnregisterKind(testKind)
+	defer manifest.UnregisterKind(testKind)
 
 	testCases := map[string]struct {
 		given       string
-		expect      wyrd.ResourceManifest
+		expect      manifest.ResourceManifest
 		expectError bool
 	}{
 		"nothing": {
 			given: `metadata:
     name: "xyz"
 `,
-			expect: wyrd.ResourceManifest{
-				Metadata: wyrd.ObjectMeta{
+			expect: manifest.ResourceManifest{
+				Metadata: manifest.ObjectMeta{
 					Name: "xyz",
 				},
 			},
@@ -235,9 +235,9 @@ spec:
     value: 1
     name: life
 `,
-			expect: wyrd.ResourceManifest{
-				TypeMeta: wyrd.TypeMeta{
-					Kind: wyrd.Kind("unknownSpec"),
+			expect: manifest.ResourceManifest{
+				TypeMeta: manifest.TypeMeta{
+					Kind: manifest.Kind("unknownSpec"),
 				},
 				Spec: map[string]any{
 					"value": 1,
@@ -247,8 +247,8 @@ spec:
 			expectError: false,
 		},
 		"min-spec": {
-			expect: wyrd.ResourceManifest{
-				TypeMeta: wyrd.TypeMeta{
+			expect: manifest.ResourceManifest{
+				TypeMeta: manifest.TypeMeta{
 					Kind: testKind,
 				},
 				Spec: &TestSpec{},
@@ -257,11 +257,11 @@ spec:
 `,
 		},
 		"basic": {
-			expect: wyrd.ResourceManifest{
-				TypeMeta: wyrd.TypeMeta{
+			expect: manifest.ResourceManifest{
+				TypeMeta: manifest.TypeMeta{
 					Kind: testKind,
 				},
-				Metadata: wyrd.ObjectMeta{
+				Metadata: manifest.ObjectMeta{
 					Name: "test-spec",
 				},
 				Spec: &TestSpec{
@@ -282,7 +282,7 @@ spec:
 	for name, tc := range testCases {
 		test := tc
 		t.Run(name, func(t *testing.T) {
-			var got wyrd.ResourceManifest
+			var got manifest.ResourceManifest
 			err := yaml.Unmarshal([]byte(test.given), &got)
 			if test.expectError {
 				require.Error(t, err, "expected error: %v", test.expectError)
@@ -299,14 +299,14 @@ func TestCustomUnmarshaling_JSON(t *testing.T) {
 		Value int    `yaml:"value"`
 		Name  string `yaml:"name"`
 	}
-	testKind := wyrd.Kind("testSpec")
+	testKind := manifest.Kind("testSpec")
 
-	err := wyrd.RegisterKind(testKind, &TestSpec{})
+	err := manifest.RegisterKind(testKind, &TestSpec{})
 	require.NoError(t, err)
-	defer wyrd.UnregisterKind(testKind)
+	defer manifest.UnregisterKind(testKind)
 
 	testCases := map[string]struct {
-		givenKind   wyrd.Kind
+		givenKind   manifest.Kind
 		givenData   json.RawMessage
 		expect      any
 		expectError bool
@@ -339,12 +339,82 @@ func TestCustomUnmarshaling_JSON(t *testing.T) {
 	for name, tc := range testCases {
 		test := tc
 		t.Run(name, func(t *testing.T) {
-			got, err := wyrd.UnmarshalJSONWithRegister(test.givenKind, wyrd.InstanceOf, test.givenData)
+			got, err := manifest.UnmarshalJSONWithRegister(test.givenKind, manifest.InstanceOf, test.givenData)
 			if test.expectError {
 				require.Error(t, err, "expected error: %v", test.expectError)
 			} else {
 				require.NoError(t, err, "expected error: %v", test.expectError)
 				require.Equal(t, test.expect, got)
+			}
+		})
+	}
+}
+
+func TestMetadataValidation(t *testing.T) {
+	testCases := map[string]struct {
+		given       manifest.ObjectMeta
+		expectError bool
+	}{
+		"empty-value-ok": {given: manifest.ObjectMeta{}},
+		"just.key": {
+			given: manifest.ObjectMeta{
+				Name: "name",
+				Labels: manifest.Labels{
+					"key":                 "",
+					"app.k8s.io/key.name": "",
+				},
+			},
+		},
+		"invalid-labels": {
+			given: manifest.ObjectMeta{
+				Name: "name",
+				Labels: manifest.Labels{
+					"app.k8s.io/version":                "321",
+					"app.k8s.io/version.1":              "+321",
+					"app.k8s.io/version.semantic":       "1.2.3",
+					"app.k8s.io/version.semantic.build": "1.2.3 dev",
+				},
+			},
+			expectError: true,
+		},
+		"capital-name-invalid": {
+			given: manifest.ObjectMeta{
+				Name: "Name",
+			},
+			expectError: true,
+		},
+		"space-name-invalid": {
+			given: manifest.ObjectMeta{
+				Name: "name space",
+			},
+			expectError: true,
+		},
+		"numeric-names-ok": {
+			given: manifest.ObjectMeta{
+				Name: "9wha8",
+			},
+		},
+		"names-cant-start-with-dash": {
+			given: manifest.ObjectMeta{
+				Name: "-wha8",
+			},
+			expectError: true,
+		},
+		"numeric-name-2-invalid": {
+			given: manifest.ObjectMeta{
+				Name: "9wha&8",
+			},
+			expectError: true,
+		},
+	}
+
+	for name, tc := range testCases {
+		test := tc
+		t.Run(name, func(t *testing.T) {
+			if test.expectError {
+				require.Error(t, test.given.Validate())
+			} else {
+				require.NoError(t, test.given.Validate())
 			}
 		})
 	}

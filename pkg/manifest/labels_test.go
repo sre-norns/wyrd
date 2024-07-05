@@ -465,9 +465,38 @@ func TestParseSelector(t *testing.T) {
 	}
 }
 
-// ValidateLabelKeyPrefix
-//
+func TestValidateSubdmainName(t *testing.T) {
+	testCases := map[string]struct {
+		given       string
+		expectError bool
+	}{
+		"single-value-ok": {given: "x"},
+		"simple-value-ok": {given: "value"},
+		"domain.name":     {given: "app.kubernetes.io"},
+		"numbers":         {given: "321"},
 
+		"no-negative-numbers":    {given: "-321", expectError: true},
+		"no-negative-names":      {given: "-in.k8s.net", expectError: true},
+		"no-spaces in between":   {given: "value with spaces", expectError: true},
+		"no-spaces at the start": {given: " value", expectError: true},
+		"no-spaces at the end":   {given: "value ", expectError: true},
+
+		"no-capitals-start": {given: "Name", expectError: true},
+		"no-capitals-mid":   {given: "why-Not", expectError: true},
+		"no-capitals-end":   {given: "why.name.X", expectError: true},
+	}
+
+	for name, tc := range testCases {
+		test := tc
+		t.Run(name, func(t *testing.T) {
+			if test.expectError {
+				require.Error(t, manifest.ValidateSubdomainName(test.given))
+			} else {
+				require.NoError(t, manifest.ValidateSubdomainName(test.given))
+			}
+		})
+	}
+}
 func TestValidateLabelKeyName(t *testing.T) {
 	testCases := map[string]struct {
 		given       string
