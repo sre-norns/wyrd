@@ -156,7 +156,7 @@ func (s *DBStore) AddLinked(ctx context.Context, value any, link string, owner a
 }
 
 func (s *DBStore) RemoveLinked(ctx context.Context, value any, link string, owner any) error {
-	return s.singleTransaction(ctx).AddLinked(value, link, owner)
+	return s.singleTransaction(ctx).RemoveLinked(value, link, owner)
 }
 
 func (s *DBStore) Get(ctx context.Context, dest any, id manifest.ResourceID, options ...Option) (bool, error) {
@@ -165,7 +165,7 @@ func (s *DBStore) Get(ctx context.Context, dest any, id manifest.ResourceID, opt
 
 func (s *DBStore) GetWithVersion(ctx context.Context, dest any, id manifest.VersionedResourceID, options ...Option) (bool, error) {
 	tx := applyOptions(s.db.WithContext(ctx), dest, options...)
-	tx = tx.Where(fmt.Sprintf("%s = ?", s.config.VersionColumnName), id.Version).First(dest, id)
+	tx = tx.Where(fmt.Sprintf("%s = ?", s.config.VersionColumnName), id.Version).First(dest, id.ID)
 	if errors.Is(tx.Error, gorm.ErrRecordNotFound) {
 		return false, nil
 	}
