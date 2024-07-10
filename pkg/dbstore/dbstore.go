@@ -225,7 +225,14 @@ func (s *DBStore) FindLabelValues(ctx context.Context, model any, key string, se
 	var ls []rawJSONSQL
 
 	tx := limitedQuery(s.db.Model(model).WithContext(ctx), searchQuery)
-	tx = tx.Joins(fmt.Sprintf(", json_each(%s)", s.config.LabelsColumnName)).Where("key = ?", key)
+	tx = tx.Clauses(clause.From{
+		Joins: []clause.Join{
+			{
+				Expression: JSONExtract(s.config.LabelsColumnName),
+			},
+		},
+	})
+	tx = tx.Where("key = ?", key)
 	rtx := matchName(tx, "value", searchQuery).Select("key", "value").Scan(&ls)
 
 	result := make(manifest.Labels, len(ls))
@@ -241,7 +248,13 @@ func (s *DBStore) FindLabels(ctx context.Context, model any, searchQuery manifes
 
 	tx := limitedQuery(s.db.Model(model).WithContext(ctx), searchQuery)
 	// SELECT key, value FROM conversations, json_each(cast(conversations.labels as json));
-	tx = tx.Joins(fmt.Sprintf(", json_each(%s)", s.config.LabelsColumnName))
+	tx = tx.Clauses(clause.From{
+		Joins: []clause.Join{
+			{
+				Expression: JSONExtract(s.config.LabelsColumnName),
+			},
+		},
+	})
 	rtx := matchName(tx, "key", searchQuery).Select("key", "value").Scan(&ls)
 
 	result := make(manifest.Labels, len(ls))

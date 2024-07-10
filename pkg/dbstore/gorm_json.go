@@ -259,3 +259,31 @@ func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
 	}
 
 }
+
+type JSONExtractExpression struct {
+	column string
+}
+
+// JSONExtract extracts key,values as text from a Column holding JSON
+func JSONExtract(column string) *JSONExtractExpression {
+	return &JSONExtractExpression{column: column}
+}
+
+// Build implements GORM Expression interface
+func (jsonQuery *JSONExtractExpression) Build(builder clause.Builder) {
+	stmt, ok := builder.(*gorm.Statement)
+	if !ok {
+		return
+	}
+
+	switch stmt.Dialector.Name() {
+	case "mysql", "sqlite":
+		builder.WriteString(", json_each(")
+		builder.WriteQuoted(jsonQuery.column)
+		builder.WriteByte(')')
+	case "postgres":
+		builder.WriteString(", json_each_text(")
+		builder.WriteQuoted(jsonQuery.column)
+		builder.WriteByte(')')
+	}
+}
