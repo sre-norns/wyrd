@@ -25,8 +25,32 @@ var (
 // Kind represents ID of a type that can be used as a spec in a manifest
 type Kind string
 
+// KindSpec defines mapping of a manifest to types
+type KindSpec struct {
+	SpecType   reflect.Type
+	StatusType reflect.Type
+}
+
 // Registry of types that can be used in a manifest spec
-var metaKindRegistry = map[Kind]reflect.Type{}
+var metaKindRegistry = map[Kind]KindSpec{}
+
+func ExemplarType(spec any) (reflect.Type, error) {
+	if spec == nil {
+		return nil, nil
+	}
+
+	val := reflect.ValueOf(spec)
+	if !val.CanInterface() {
+		return nil, fmt.Errorf("%q %w", val.Type(), ErrUninterfacableType)
+	}
+
+	t := val.Type()
+	if val.Kind() == reflect.Pointer {
+		t = val.Elem().Type()
+	}
+
+	return t, nil
+}
 
 // RegisterKind is called to associate given 'kind' ID with a given type.
 // Later, an instance of that 'kind' can be created using `InstanceOf`
@@ -35,22 +59,29 @@ var metaKindRegistry = map[Kind]reflect.Type{}
 // obj, err := manifest.RegisterKind(manifest.Kind("mySpec"), &MySpec{})
 // ```
 // Note: it is an error to double register the same `kind`.
-func RegisterKind(kind Kind, proto any) error {
+func RegisterKind(kind Kind, spec any) error {
+	return RegisterManifest(kind, spec, nil)
+}
+
+func RegisterManifest(kind Kind, spec, status any) error {
 	if _, know := metaKindRegistry[kind]; know {
 		return fmt.Errorf("kind %q already registered", kind)
 	}
 
-	val := reflect.ValueOf(proto)
-	if !val.CanInterface() {
-		return fmt.Errorf("%q %w", val.Type(), ErrUninterfacableType)
+	specType, err := ExemplarType(spec)
+	if err != nil {
+		return err
+	}
+	statusType, err := ExemplarType(status)
+	if err != nil {
+		return err
 	}
 
-	t := val.Type()
-	if val.Kind() == reflect.Pointer {
-		t = val.Elem().Type()
+	metaKindRegistry[kind] = KindSpec{
+		SpecType:   specType,
+		StatusType: statusType,
 	}
 
-	metaKindRegistry[kind] = t
 	return nil
 }
 
@@ -67,16 +98,29 @@ func UnregisterKind(kind Kind) {
 }
 
 // KindFactory is a type of function that creates instances of a given `Kind`
-type KindFactory func(kind Kind) (any, error)
+type KindFactory func(kind Kind) (ResourceManifest, error)
 
 // InstanceOf is a default `KindFactory` to create instances of previously registered kinds
-func InstanceOf(kind Kind) (any, error) {
-	t, known := metaKindRegistry[kind]
+func InstanceOf(kind Kind) (ResourceManifest, error) {
+	kindSpec, known := metaKindRegistry[kind]
 	if !known {
-		return nil, fmt.Errorf("%w: %q", ErrUnknownKind, kind)
+		return ResourceManifest{}, fmt.Errorf("%w: %q", ErrUnknownKind, kind)
 	}
 
-	return reflect.New(t).Interface(), nil
+	result := ResourceManifest{
+		TypeMeta: TypeMeta{
+			Kind: kind,
+		},
+	}
+
+	if kindSpec.SpecType != nil {
+		result.Spec = reflect.New(kindSpec.SpecType).Interface()
+	}
+	if kindSpec.StatusType != nil {
+		result.Status = reflect.New(kindSpec.StatusType).Interface()
+	}
+
+	return result, nil
 }
 
 // KindOf returns `kind` id for the given type if its a registered kind.
@@ -91,8 +135,8 @@ func KindOf(maybeSpec any) (result Kind, known bool) {
 	}
 
 	// Linear scan over map to find key with value equals give: not that terrible when the map is small
-	for kind, v := range metaKindRegistry {
-		if v == t {
+	for kind, kindSpec := range metaKindRegistry {
+		if kindSpec.SpecType == t {
 			return kind, true
 		}
 	}
@@ -192,6 +236,7 @@ type ResourceManifest struct {
 	TypeMeta `json:",inline" yaml:",inline"`
 	Metadata ObjectMeta `json:"metadata" yaml:"metadata"`
 	Spec     any        `json:"-" yaml:"-"`
+	Status   any        `json:"-" yaml:"-"`
 
 	// Links is not a part of CRD spec, but part of semantic model, it defines actions applicable to this model
 	HResponse `json:",inline" yaml:",inline"`
@@ -202,46 +247,75 @@ func (s ResourceManifest) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
 		TypeMeta `json:",inline"`
 		Metadata ObjectMeta `json:"metadata"`
-		Spec     any        `json:"spec,omitempty"` // needed to strip any json tags
+		Spec     any        `json:"spec,omitempty"`   // needed to strip any json tags
+		Status   any        `json:"status,omitempty"` // needed to strip any json tags
 	}{
 		TypeMeta: s.TypeMeta,
 		Metadata: s.Metadata,
 		Spec:     s.Spec,
+		Status:   s.Status,
 	})
 }
 
-// UnmarshalJSONWithRegister is a "helper" method to unmarshal expected `kind` spec using given factory and RawJson data.
-func UnmarshalJSONWithRegister(kind Kind, factory KindFactory, specData json.RawMessage) (any, error) {
-	spec, err := factory(kind)
-	if err != nil { // Kind is not known, get raw message if not-nil
-		if len(specData) != 0 { // Is there a spec to parse
-			t := make(map[string]any)
-			if err := json.Unmarshal(specData, &t); err == nil {
-				spec = t
-			} else {
-				spec = specData
-			}
+func tryPreserveJSON(data json.RawMessage) any {
+	if len(data) != 0 { // Is there a spec to parse
+		t := make(map[string]any)
+		if err := json.Unmarshal(data, &t); err == nil {
+			return t
+		} else {
+			return data
 		}
-		return spec, nil
 	}
 
-	if len(specData) == 0 { // No spec to parse
-		return nil, nil
+	return nil
+}
+
+// UnmarshalJSONWithRegister is a "helper" method to unmarshal expected `kind` spec using given factory and RawJson data.
+func UnmarshalJSONWithRegister(kind Kind, factory KindFactory, specData json.RawMessage, statusData json.RawMessage) (ResourceManifest, error) {
+	resource, err := factory(kind)
+	if err != nil { // Kind is not known, get raw message if not-nil
+		resource.Spec = tryPreserveJSON(specData)
+		resource.Status = tryPreserveJSON(statusData)
+		return resource, nil
 	}
 
-	decoder := json.NewDecoder(bytes.NewReader(specData))
-	decoder.DisallowUnknownFields()
-	err = decoder.Decode(spec)
+	if len(specData) != 0 {
+		if resource.Spec == nil {
+			return resource, fmt.Errorf("manifest has no spec type associated")
+		}
+		decoder := json.NewDecoder(bytes.NewReader(specData))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(resource.Spec); err != nil {
+			return resource, fmt.Errorf("failed to decode spec: %w", err)
+		}
+	} else { // No spec to parse
+		resource.Spec = nil
+	}
 
-	return spec, err
+	if len(statusData) != 0 {
+		if resource.Status == nil {
+			return resource, fmt.Errorf("manifest has no status type associated")
+		}
+
+		decoder := json.NewDecoder(bytes.NewReader(statusData))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(resource.Status); err != nil {
+			return resource, fmt.Errorf("failed to decode status: %w", err)
+		}
+	} else { // No spec to parse
+		resource.Status = nil
+	}
+
+	return resource, err
 }
 
 // UnmarshalJSON is an implementation of golang [encoding/json.Unmarshaler] interface
 func (s *ResourceManifest) UnmarshalJSON(data []byte) (err error) {
 	aux := struct {
 		TypeMeta `json:",inline"`
-		Metadata ObjectMeta `json:"metadata"`
-		Spec     json.RawMessage
+		Metadata ObjectMeta      `json:"metadata"`
+		Spec     json.RawMessage `json:"spec"`
+		Status   json.RawMessage `json:"status"`
 	}{
 		TypeMeta: s.TypeMeta,
 		Metadata: s.Metadata,
@@ -251,9 +325,9 @@ func (s *ResourceManifest) UnmarshalJSON(data []byte) (err error) {
 		return err
 	}
 
+	*s, err = UnmarshalJSONWithRegister(aux.Kind, InstanceOf, aux.Spec, aux.Status)
 	s.TypeMeta = aux.TypeMeta
 	s.Metadata = aux.Metadata
-	s.Spec, err = UnmarshalJSONWithRegister(aux.Kind, InstanceOf, aux.Spec)
 	return
 }
 
@@ -262,35 +336,73 @@ func (s ResourceManifest) MarshalYAML() (interface{}, error) {
 	return struct {
 		TypeMeta `json:",inline" yaml:",inline"`
 		Metadata ObjectMeta `json:"metadata" yaml:"metadata"`
-		Spec     any        `json:"spec" yaml:"spec,omitempty"` // needed to strip any json tags
+		Spec     any        `json:"spec" yaml:"spec,omitempty"`     // needed to strip any json tags
+		Status   any        `json:"status" yaml:"status,omitempty"` // needed to strip any json tags
 	}{
 		TypeMeta: s.TypeMeta,
 		Metadata: s.Metadata,
 		Spec:     s.Spec,
+		Status:   s.Status,
 	}, nil
 }
 
 // UnmarshalYAML decodes manifest object from YAML representation.
 func (s *ResourceManifest) UnmarshalYAML(n *yaml.Node) (err error) {
 	type S ResourceManifest
-	type T struct {
-		*S   `yaml:",inline"`
-		Spec yaml.Node `yaml:"spec"`
+	// type T struct {
+	// 	*S   `yaml:",inline"`
+	// 	Spec yaml.Node `yaml:"spec"`
+	// }
+	// obj := &T{S: (*S)(s)}
+
+	obj := &struct {
+		*S     `yaml:",inline"`
+		Spec   yaml.Node `yaml:"spec"`
+		Status yaml.Node `yaml:"status"`
+	}{
+		S: (*S)(s),
 	}
 
-	obj := &T{S: (*S)(s)}
 	if err = n.Decode(obj); err != nil {
 		return
 	}
 
-	s.Spec, err = InstanceOf(s.Kind)
+	// result.TypeMeta = obj.TypeMeta
+	// result.Metadata = obj.Metadata
+
+	result, err := InstanceOf(s.Kind)
 	if err != nil {
 		if len(obj.Spec.Content) == 0 {
-			s.Spec = nil
+			result.Spec = nil
+		} else {
+			result.Spec = make(map[string]any)
+		}
+		if len(obj.Status.Content) == 0 {
+			result.Status = nil
+		} else {
+			result.Status = make(map[string]any)
+		}
+
+		if result.Spec == nil && result.Status == nil {
+			// s.Spec = nil
+			// s.Status = nil
 			return nil
 		}
-		s.Spec = make(map[string]any)
 	}
 
-	return obj.Spec.Decode(s.Spec)
+	if result.Spec != nil {
+		if err := obj.Spec.Decode(result.Spec); err != nil {
+			return fmt.Errorf("failed to decode spec from YML: %w", err)
+		}
+	}
+	if result.Status != nil {
+		if err := obj.Status.Decode(result.Status); err != nil {
+			return fmt.Errorf("failed to decode status from YML: %w", err)
+		}
+	}
+
+	s.Spec = result.Spec
+	s.Status = result.Status
+
+	return nil
 }
