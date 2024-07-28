@@ -21,6 +21,7 @@ func newTransactionContext() transactionContext {
 
 type Option func(any, transactionContext) transactionContext
 
+// Omit option allows to specify what fields should be omitted when writing or reading an entry
 func Omit(value string) Option {
 	return func(a any, tc transactionContext) transactionContext {
 		tc.Omit[value] = struct{}{}
@@ -28,6 +29,7 @@ func Omit(value string) Option {
 	}
 }
 
+// Expand option instruct fetch operation to pull associated entries in one-to-many relation
 func Expand(value string, searchQuery manifest.SearchQuery) Option {
 	return func(a any, tc transactionContext) transactionContext {
 		tc.Expand[value] = searchQuery
@@ -35,6 +37,7 @@ func Expand(value string, searchQuery manifest.SearchQuery) Option {
 	}
 }
 
+// IncludeDeleted enable operation to apply to soft-deleted entries too.
 func IncludeDeleted() Option {
 	return func(a any, tc transactionContext) transactionContext {
 		tc.unScoped = true
@@ -44,6 +47,7 @@ func IncludeDeleted() Option {
 
 // Store interface defines for manifest.ResourceModel storage
 type Store interface {
+	// Ping performs basic connectivity check to the store.
 	Ping(context.Context) error
 
 	Create(ctx context.Context, value any, options ...Option) error
