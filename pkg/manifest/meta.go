@@ -85,9 +85,16 @@ func RegisterManifest(kind Kind, spec, status any) error {
 	return nil
 }
 
-// MustRegisterKind calls RegisterKind to registers a kind and panics on error
+// MustRegisterKind calls RegisterKind to registers a kind and panics on error.
 func MustRegisterKind(kind Kind, proto any) {
 	if err := RegisterKind(kind, proto); err != nil {
+		panic(err)
+	}
+}
+
+// MustRegisterManifest registers types for a stateful manifest and panics on error.
+func MustRegisterManifest(kind Kind, specType, statusType any) {
+	if err := RegisterManifest(kind, specType, statusType); err != nil {
 		panic(err)
 	}
 }
@@ -95,6 +102,11 @@ func MustRegisterKind(kind Kind, proto any) {
 // UnregisterKind unregisters previously registered 'kind' value
 func UnregisterKind(kind Kind) {
 	delete(metaKindRegistry, kind)
+}
+
+func LookupKind(kind Kind) (result KindSpec, known bool) {
+	result, known = metaKindRegistry[kind]
+	return
 }
 
 // KindFactory is a type of function that creates instances of a given `Kind`

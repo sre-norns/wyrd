@@ -2,6 +2,7 @@ package manifest
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 
 	"github.com/google/uuid"
@@ -24,8 +25,10 @@ type ResourceID string
 var InvalidResourceID ResourceID = ResourceID("")
 
 var (
-	ErrNilSpec         = fmt.Errorf("spec is nil")
-	ErrSpecTypeInvalid = fmt.Errorf("invalid spec type")
+	ErrNilSpec           = fmt.Errorf(".spec is nil")
+	ErrNilStatus         = fmt.Errorf(".status is nil")
+	ErrSpecTypeInvalid   = fmt.Errorf("invalid manifest .spec type")
+	ErrStatusTypeInvalid = fmt.Errorf("invalid manifest .status type")
 )
 
 // String returns string representation of the [ResourceID] value
@@ -71,9 +74,13 @@ type ResourceModel[SpecType any] struct {
 }
 
 type StatefulResource[SpecType, StatusType any] struct {
-	ResourceModel[SpecType] `json:",inline" yaml:",inline"`
+	ObjectMeta `json:",inline" yaml:",inline"`
+	Spec       SpecType `json:"spec" yaml:"spec" gorm:"embedded"`
 
 	Status StatusType `json:"status,omitempty" yaml:"status,omitempty" gorm:"embedded;embeddedPrefix:status_"`
+
+	// Part of semantic model - defines actions applicable to this model
+	HResponse `json:",inline" yaml:",inline" gorm:"-"`
 }
 
 func ToManifest[SpecType any](r ResourceModel[SpecType]) ResourceManifest {
@@ -88,19 +95,76 @@ func ToManifest[SpecType any](r ResourceModel[SpecType]) ResourceManifest {
 }
 
 func ManifestAsResource[SpecType any](newEntry ResourceManifest) (ResourceModel[SpecType], error) {
-	if newEntry.Spec == nil {
-		return ResourceModel[SpecType]{}, ErrNilSpec
-	}
-
-	spec, ok := newEntry.Spec.(*SpecType)
-	if !ok {
-		return ResourceModel[SpecType]{}, ErrSpecTypeInvalid
-	}
-
-	return ResourceModel[SpecType]{
+	result := ResourceModel[SpecType]{
 		ObjectMeta: newEntry.Metadata,
-		Spec:       *spec,
-	}, nil
+	}
+
+	manifestSpec, exist := LookupKind(newEntry.Kind)
+	if !exist {
+		return result, fmt.Errorf("%w: %q", ErrUnknownKind, newEntry.Kind)
+	}
+
+	if manifestSpec.SpecType != nil && newEntry.Spec == nil {
+		return result, ErrNilSpec
+	}
+	if manifestSpec.SpecType == nil && newEntry.Spec != nil {
+		return result, fmt.Errorf("%w: expected nill .spec", ErrSpecTypeInvalid)
+	}
+
+	// TODO: Can we cast base on manifestSpec.SpecType?
+	if manifestSpec.SpecType != nil && newEntry.Spec != nil {
+		if spec, ok := newEntry.Spec.(*SpecType); !ok {
+			var t *SpecType
+			return result, fmt.Errorf("%w: can't cast %v to %v", ErrSpecTypeInvalid, reflect.TypeOf(newEntry.Spec), reflect.TypeOf(t))
+		} else {
+			result.Spec = *spec
+		}
+	}
+
+	return result, nil
+}
+
+func ManifestAsStatefulResource[SpecType, StatusType any](newEntry ResourceManifest) (StatefulResource[SpecType, StatusType], error) {
+	result := StatefulResource[SpecType, StatusType]{
+		ObjectMeta: newEntry.Metadata,
+	}
+
+	manifestSpec, exist := LookupKind(newEntry.Kind)
+	if !exist {
+		return result, fmt.Errorf("%w: %q", ErrUnknownKind, newEntry.Kind)
+	}
+
+	if manifestSpec.SpecType != nil && newEntry.Spec == nil {
+		return result, ErrNilSpec
+	}
+	if manifestSpec.SpecType == nil && newEntry.Spec != nil {
+		return result, ErrSpecTypeInvalid
+	}
+
+	if manifestSpec.StatusType != nil && newEntry.Status == nil {
+		return result, ErrNilStatus
+	}
+	if manifestSpec.StatusType == nil && newEntry.Status != nil {
+		return result, ErrStatusTypeInvalid
+	}
+
+	if manifestSpec.SpecType != nil && newEntry.Spec != nil {
+		if spec, ok := newEntry.Status.(*SpecType); !ok {
+			return result, ErrSpecTypeInvalid
+		} else {
+			result.Spec = *spec
+		}
+	}
+
+	if manifestSpec.StatusType != nil && newEntry.Status != nil {
+		if status, ok := newEntry.Status.(*StatusType); !ok {
+			return result, ErrStatusTypeInvalid
+		} else {
+			result.Status = *status
+		}
+	}
+
+	return result, nil
 }
 
 func (r *ResourceModel[SpecType]) BeforeCreate(tx *gorm.DB) (err error) {

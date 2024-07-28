@@ -67,7 +67,6 @@ func TestManifestUnmarshaling_JSON(t *testing.T) {
 	}
 
 	testKind := manifest.Kind("testSpec")
-
 	require.NoError(t, manifest.RegisterKind(testKind, &TestSpec{}))
 	defer manifest.UnregisterKind(testKind)
 
