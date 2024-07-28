@@ -19,9 +19,11 @@ var (
 )
 
 type Config struct {
+	IDColumnName        string
 	VersionColumnName   string
 	LabelsColumnName    string
 	CreatedAtColumnName string
+	DeletedAtColumnName string
 }
 
 type rawJSONSQL struct {
@@ -40,16 +42,20 @@ func NewDBStore(db *gorm.DB, cfg Config) (TransitionalStore, error) {
 		return nil, ErrNoDBObject
 	}
 
+	if cfg.IDColumnName == "" {
+		cfg.IDColumnName = "uid"
+	}
 	if cfg.LabelsColumnName == "" {
 		cfg.LabelsColumnName = "labels"
 	}
-
 	if cfg.VersionColumnName == "" {
 		cfg.VersionColumnName = "version"
 	}
-
 	if cfg.CreatedAtColumnName == "" {
 		cfg.CreatedAtColumnName = "created_at"
+	}
+	if cfg.DeletedAtColumnName == "" {
+		cfg.DeletedAtColumnName = "deleted_at"
 	}
 
 	return &DBStore{
@@ -59,7 +65,7 @@ func NewDBStore(db *gorm.DB, cfg Config) (TransitionalStore, error) {
 }
 
 func applyOptions(tx *gorm.DB, value any, options ...Option) *gorm.DB {
-	tContext := NewTransactionContext()
+	tContext := newTransactionContext()
 	for _, o := range options {
 		tContext = o(value, tContext)
 	}
@@ -70,6 +76,10 @@ func applyOptions(tx *gorm.DB, value any, options ...Option) *gorm.DB {
 
 	for expand := range tContext.Expand {
 		tx = tx.Preload(expand)
+	}
+
+	if tContext.unScoped {
+		tx = tx.Unscoped()
 	}
 
 	return tx
@@ -140,7 +150,7 @@ func (s *DBStore) Create(ctx context.Context, value any, options ...Option) erro
 
 func (s *DBStore) FindLinked(ctx context.Context, dest any, link string, owner any, searchQuery manifest.SearchQuery, options ...Option) (totalCount int64, err error) {
 	tx := applyOptions(s.db.Model(owner).WithContext(ctx), dest, options...)
-	tx, err = withSelector(tx, s.config.LabelsColumnName, searchQuery)
+	tx, err = withSelector(tx, s.config.LabelsColumnName, s.config.CreatedAtColumnName, searchQuery)
 	if err != nil {
 		return
 	}
@@ -176,13 +186,17 @@ func (s *DBStore) Update(ctx context.Context, value any, id manifest.VersionedRe
 	return s.singleTransaction(ctx).Update(value, id, options...)
 }
 
-func (s *DBStore) Delete(ctx context.Context, value any, id manifest.VersionedResourceID) (bool, error) {
-	return s.singleTransaction(ctx).Delete(value, id)
+func (s *DBStore) Delete(ctx context.Context, value any, id manifest.ResourceID, version manifest.Version, options ...Option) (bool, error) {
+	return s.singleTransaction(ctx).Delete(value, id, version, options...)
+}
+
+func (s *DBStore) Restore(ctx context.Context, model any, id manifest.ResourceID) (existed bool, err error) {
+	return s.singleTransaction(ctx).Restore(model, id)
 }
 
 func (s *DBStore) Find(ctx context.Context, resources any, searchQuery manifest.SearchQuery, options ...Option) (int64, error) {
 	tx := applyOptions(s.db.WithContext(ctx), resources, options...)
-	tx, err := withSelector(tx, s.config.LabelsColumnName, searchQuery)
+	tx, err := withSelector(tx, s.config.LabelsColumnName, s.config.CreatedAtColumnName, searchQuery)
 	if err != nil {
 		return 0, err
 	}
@@ -265,7 +279,7 @@ func (s *DBStore) FindLabels(ctx context.Context, model any, searchQuery manifes
 	return result, rtx.Error
 }
 
-func withSelector(tx *gorm.DB, jcolumn string, query manifest.SearchQuery) (*gorm.DB, error) {
+func withSelector(tx *gorm.DB, jcolumn, timeColumn string, query manifest.SearchQuery) (*gorm.DB, error) {
 	// Apply offset and limit to the query
 	tx = limitedQuery(tx, query)
 
@@ -273,7 +287,7 @@ func withSelector(tx *gorm.DB, jcolumn string, query manifest.SearchQuery) (*gor
 	tx = matchName(tx, "name", query)
 
 	// Apply time-range limit
-	tx = limitTimeRange(tx, "created_at", query.FromTime, query.TillTime)
+	tx = limitTimeRange(tx, timeColumn, query.FromTime, query.TillTime)
 
 	// Convert Label-based selector to the SQL query
 	if query.Selector == nil {

@@ -6,30 +6,38 @@ import (
 	"github.com/sre-norns/wyrd/pkg/manifest"
 )
 
-type TransactionContext struct {
-	Omit   map[string]struct{}
-	Expand map[string]manifest.SearchQuery
+type transactionContext struct {
+	unScoped bool
+	Omit     map[string]struct{}
+	Expand   map[string]manifest.SearchQuery
 }
 
-func NewTransactionContext() TransactionContext {
-	return TransactionContext{
+func newTransactionContext() transactionContext {
+	return transactionContext{
 		Omit:   map[string]struct{}{},
 		Expand: map[string]manifest.SearchQuery{},
 	}
 }
 
-type Option func(any, TransactionContext) TransactionContext
+type Option func(any, transactionContext) transactionContext
 
 func Omit(value string) Option {
-	return func(a any, tc TransactionContext) TransactionContext {
+	return func(a any, tc transactionContext) transactionContext {
 		tc.Omit[value] = struct{}{}
 		return tc
 	}
 }
 
 func Expand(value string, searchQuery manifest.SearchQuery) Option {
-	return func(a any, tc TransactionContext) TransactionContext {
+	return func(a any, tc transactionContext) transactionContext {
 		tc.Expand[value] = searchQuery
+		return tc
+	}
+}
+
+func IncludeDeleted() Option {
+	return func(a any, tc transactionContext) transactionContext {
+		tc.unScoped = true
 		return tc
 	}
 }
@@ -42,7 +50,8 @@ type Store interface {
 	Get(ctx context.Context, value any, id manifest.ResourceID, options ...Option) (exists bool, err error)
 	GetWithVersion(ctx context.Context, dest any, id manifest.VersionedResourceID, options ...Option) (bool, error)
 	Update(ctx context.Context, newValue any, id manifest.VersionedResourceID, options ...Option) (exists bool, err error)
-	Delete(ctx context.Context, model any, id manifest.VersionedResourceID) (existed bool, err error)
+	Delete(ctx context.Context, model any, id manifest.ResourceID, version manifest.Version, options ...Option) (existed bool, err error)
+	Restore(ctx context.Context, model any, id manifest.ResourceID) (existed bool, err error)
 
 	AddLinked(ctx context.Context, value any, link string, owner any, options ...Option) error
 	RemoveLinked(ctx context.Context, value any, link string, owner any) error
@@ -65,7 +74,7 @@ type StoreTransaction interface {
 
 	Create(value any, options ...Option) error
 	Update(newValue any, id manifest.VersionedResourceID, options ...Option) (exists bool, err error)
-	Delete(model any, id manifest.VersionedResourceID) (existed bool, err error)
+	Delete(model any, id manifest.ResourceID, version manifest.Version, options ...Option) (existed bool, err error)
 	Get(value any, id manifest.ResourceID, options ...Option) (exists bool, err error)
 
 	AddLinked(value any, link string, owner any, options ...Option) error
