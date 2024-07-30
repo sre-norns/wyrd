@@ -218,7 +218,7 @@ func (s *DBStore) Find(ctx context.Context, resources any, searchQuery manifest.
 	return rtx.RowsAffected, rtx.Error
 }
 
-func (s *DBStore) FindNames(ctx context.Context, model any, searchQuery manifest.SearchQuery, options ...Option) (manifest.Labels, error) {
+func (s *DBStore) FindNames(ctx context.Context, model any, searchQuery manifest.SearchQuery, options ...Option) (manifest.StringSet, error) {
 	tx := limitedQuery(s.db.Model(model).WithContext(ctx), searchQuery)
 	tx = matchName(tx, "name", searchQuery)
 
@@ -227,17 +227,15 @@ func (s *DBStore) FindNames(ctx context.Context, model any, searchQuery manifest
 	}
 	rtx := tx.Distinct("name").Scan(&names)
 
-	result := make(manifest.Labels, len(names))
+	result := make(manifest.StringSet, len(names))
 	for _, l := range names {
-		result[l.Name] = ""
+		result[l.Name] = struct{}{}
 	}
 
 	return result, rtx.Error
 }
 
-func (s *DBStore) FindLabelValues(ctx context.Context, model any, key string, searchQuery manifest.SearchQuery, options ...Option) (manifest.Labels, error) {
-	var ls []rawJSONSQL
-
+func (s *DBStore) FindLabelValues(ctx context.Context, model any, key string, searchQuery manifest.SearchQuery, options ...Option) (manifest.StringSet, error) {
 	tx := limitedQuery(s.db.Model(model).WithContext(ctx), searchQuery)
 	tx = tx.Clauses(clause.From{
 		Joins: []clause.Join{
@@ -247,19 +245,19 @@ func (s *DBStore) FindLabelValues(ctx context.Context, model any, key string, se
 		},
 	})
 	tx = tx.Where("key = ?", key)
+
+	var ls []rawJSONSQL
 	rtx := matchName(tx, "value", searchQuery).Select("key", "value").Scan(&ls)
 
-	result := make(manifest.Labels, len(ls))
+	result := make(manifest.StringSet, len(ls))
 	for _, l := range ls {
-		result[l.Value] = l.Key
+		result[l.Value] = struct{}{}
 	}
 
 	return result, rtx.Error
 }
 
-func (s *DBStore) FindLabels(ctx context.Context, model any, searchQuery manifest.SearchQuery, options ...Option) (manifest.Labels, error) {
-	var ls []rawJSONSQL
-
+func (s *DBStore) FindLabels(ctx context.Context, model any, searchQuery manifest.SearchQuery, options ...Option) (manifest.StringSet, error) {
 	tx := limitedQuery(s.db.Model(model).WithContext(ctx), searchQuery)
 	// SELECT key, value FROM conversations, json_each(cast(conversations.labels as json));
 	tx = tx.Clauses(clause.From{
@@ -269,11 +267,13 @@ func (s *DBStore) FindLabels(ctx context.Context, model any, searchQuery manifes
 			},
 		},
 	})
+
+	var ls []rawJSONSQL
 	rtx := matchName(tx, "key", searchQuery).Select("key", "value").Scan(&ls)
 
-	result := make(manifest.Labels, len(ls))
+	result := make(manifest.StringSet, len(ls))
 	for _, l := range ls {
-		result[l.Key] = l.Value
+		result[l.Key] = struct{}{}
 	}
 
 	return result, rtx.Error
