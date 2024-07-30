@@ -181,12 +181,13 @@ func ReplyResourceCreated(ctx *gin.Context, id any, resource any) {
 
 // AbortWithError terminates response-handling chain with an error, and returns provided HTTP error response to the client
 func AbortWithError(ctx *gin.Context, code int, errValue error) {
-	if apiError, ok := errValue.(*ErrorResponse); ok {
+	if errValue == nil {
+		ctx.AbortWithStatus(code)
+	} else if apiError, ok := errValue.(*ErrorResponse); ok {
 		ctx.AbortWithStatusJSON(apiError.Code, apiError)
-		return
+	} else {
+		ctx.AbortWithStatusJSON(code, NewErrorResponse(code, errValue))
 	}
-
-	ctx.AbortWithStatusJSON(code, NewErrorResponse(code, errValue))
 }
 
 // ContentTypeAPI returns middleware to support response marshaler selection based on [HTTPHeaderAccept] value.
