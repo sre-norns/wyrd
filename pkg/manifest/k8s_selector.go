@@ -38,6 +38,14 @@ func (s *k8Selector) Requirements() (requirements Requirements, selectable bool)
 	return results, true
 }
 
+func (s *k8Selector) String() string {
+	if s == nil || s.impl == nil {
+		return "<nil>"
+	}
+
+	return s.impl.String()
+}
+
 // ParseSelector parses a string that maybe represents a label based selector.
 func ParseSelector(selector string) (Selector, error) {
 	s, err := labels.Parse(selector)

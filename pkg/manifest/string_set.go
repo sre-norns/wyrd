@@ -1,6 +1,9 @@
 package manifest
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 type StringSet map[string]struct{}
 
@@ -28,12 +31,12 @@ func (s StringSet) Any() (string, bool) {
 	return zeroValue, false
 }
 
-func (s StringSet) Slice() []string {
+func (s StringSet) Slice() sort.StringSlice {
 	if s == nil {
 		return nil
 	}
 
-	l := make([]string, 0, len(s))
+	l := make(sort.StringSlice, 0, len(s))
 	for key := range s {
 		l = append(l, key)
 	}
@@ -43,4 +46,10 @@ func (s StringSet) Slice() []string {
 
 func (s StringSet) Join(sep string) string {
 	return strings.Join(s.Slice(), sep)
+}
+
+func (s StringSet) JoinSorted(sep string) string {
+	l := s.Slice()
+	l.Sort()
+	return strings.Join(l, sep)
 }

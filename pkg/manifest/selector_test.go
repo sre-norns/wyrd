@@ -205,13 +205,111 @@ func TestSimpleSelector(t *testing.T) {
 		test := tc
 		t.Run(name, func(t *testing.T) {
 			selector := manifest.NewSelector(test.given.requirements...)
-			// if test.expect.errors {
-			// 	require.Error(t, err, "expected error: %v", test.expect.errors)
-			// } else {
-			// 	require.NoError(t, err, "expected error: %v", test.expect.errors)
-			// }
 			got := selector.Matches(test.given.labels)
 			require.Equalf(t, test.expect, got, "Given labels: %+v, selector: %q", test.given.labels, test.given.requirements)
+		})
+	}
+}
+
+func Test_RequirementStringRepr(t *testing.T) {
+	testCases := map[string]struct {
+		given  manifest.Requirement
+		expect string
+	}{
+		"nils": {
+			given:  manifest.Requirement{},
+			expect: "",
+		},
+		"exists": {
+			given:  mockRequirement(t, "test-key", manifest.Exists),
+			expect: "test-key",
+		},
+		"!exists": {
+			given:  mockRequirement(t, "mykey", manifest.DoesNotExist),
+			expect: "!mykey",
+		},
+		"eq": {
+			given:  mockRequirement(t, "mykey", manifest.Equals, "value1"),
+			expect: "mykey=value1",
+		},
+		"!eq": {
+			given:  mockRequirement(t, "mykey", manifest.NotEquals, "value1"),
+			expect: "mykey!=value1",
+		},
+		"in": {
+			given:  mockRequirement(t, "version", manifest.In, "0.9-dev", "0.8-pre"),
+			expect: "version in (0.8-pre,0.9-dev)",
+		},
+		"!in": {
+			given:  mockRequirement(t, "env", manifest.NotIn, "0.9-dev", "0.8-pre", "debug"),
+			expect: "env notin (0.8-pre,0.9-dev,debug)",
+		},
+		"gt": {
+			given:  mockRequirement(t, "number", manifest.GreaterThan, "431"),
+			expect: "number>431",
+		},
+		"lt": {
+			given:  mockRequirement(t, "number", manifest.LessThan, "974"),
+			expect: "number<974",
+		},
+	}
+
+	for name, tc := range testCases {
+		test := tc
+		t.Run(name, func(t *testing.T) {
+			require.Equal(t, test.expect, test.given.String())
+		})
+	}
+}
+
+func Test_SelectorCanParseToString(t *testing.T) {
+	testCases := map[string]struct {
+		given       *manifest.SimpleSelector
+		expectError bool
+	}{
+		"nils": {
+			given: manifest.NewSelector(),
+		},
+		"exists": {
+			given: manifest.NewSelector(
+				mockRequirement(t, "test-key", manifest.Exists),
+			),
+		},
+		"!exists": {
+			given: manifest.NewSelector(
+				mockRequirement(t, "test-key", manifest.Exists),
+				mockRequirement(t, "mykey", manifest.DoesNotExist),
+			),
+		},
+		"eq": {
+			given: manifest.NewSelector(
+				mockRequirement(t, "mykey2", manifest.Equals, "value1"),
+				mockRequirement(t, "test-key", manifest.Exists),
+				mockRequirement(t, "mykey", manifest.DoesNotExist),
+			),
+		},
+		"in-all": {
+			given: manifest.NewSelector(
+				mockRequirement(t, "mykey2", manifest.Equals, "value1"),
+				mockRequirement(t, "test-key", manifest.Exists),
+				mockRequirement(t, "mykey", manifest.DoesNotExist),
+				mockRequirement(t, "version", manifest.In, "0.9-dev", "0.8-pre"),
+				mockRequirement(t, "mykey", manifest.NotEquals, "value1"),
+				mockRequirement(t, "number", manifest.LessThan, "974"),
+				mockRequirement(t, "number", manifest.GreaterThan, "431"),
+			),
+		},
+	}
+
+	for name, tc := range testCases {
+		test := tc
+		t.Run(name, func(t *testing.T) {
+			_, err := manifest.ParseSelector(test.given.String())
+			if test.expectError {
+				require.Error(t, err, "expected error: %v", test.expectError)
+			} else {
+				require.NoError(t, err, "expected error: %v", test.expectError)
+			}
 		})
 	}
 }

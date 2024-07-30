@@ -93,6 +93,18 @@ func ToManifest[SpecType any](r ResourceModel[SpecType]) ResourceManifest {
 		Spec:     &spec,
 	}
 }
+func ToManifestWithStatus[SpecType, StatusType any](r StatefulResource[SpecType, StatusType]) ResourceManifest {
+	spec := r.Spec
+	status := r.Status
+	return ResourceManifest{
+		TypeMeta: TypeMeta{
+			Kind: MustKnowKindOf(&spec),
+		},
+		Metadata: r.ObjectMeta,
+		Spec:     &spec,
+		Status:   &status,
+	}
+}
 
 func ManifestAsResource[SpecType any](newEntry ResourceManifest) (ResourceModel[SpecType], error) {
 	result := ResourceModel[SpecType]{

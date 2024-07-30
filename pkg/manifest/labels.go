@@ -209,6 +209,12 @@ func (s SelectorRule) Format(sb *strings.Builder) {
 	}
 }
 
+func (s SelectorRule) String() string {
+	sb := strings.Builder{}
+	s.Format(&sb)
+	return sb.String()
+}
+
 // LabelSelector is a part of a resource model that holds label-based requirements for another resource
 type LabelSelector struct {
 	MatchLabels Labels `json:"matchLabels,omitempty" yaml:"matchLabels,omitempty" `

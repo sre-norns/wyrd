@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 type Operator string
@@ -113,6 +114,45 @@ func (r *Requirement) Matches(labels Labels) bool {
 	}
 }
 
+func (r *Requirement) String() string {
+	if r == nil {
+		return "<Requirement:nil>"
+	}
+
+	if len(r.key) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	switch r.operator {
+	case Exists:
+		sb.WriteString(r.key)
+	case DoesNotExist:
+		sb.WriteString(string(DoesNotExist))
+		sb.WriteString(r.key)
+	case Equals:
+		sb.WriteString(fmt.Sprintf("%v%v%v", r.key, Equals, r.Values().Slice()[0]))
+	case DoubleEquals:
+		sb.WriteString(fmt.Sprintf("%v%v%v", r.key, DoubleEquals, r.Values().Slice()[0]))
+	case NotEquals:
+		sb.WriteString(fmt.Sprintf("%v%v%v", r.key, NotEquals, r.Values().Slice()[0]))
+
+	case GreaterThan:
+		sb.WriteString(fmt.Sprintf("%v>%v", r.key, r.Values().Slice()[0]))
+	case LessThan:
+		sb.WriteString(fmt.Sprintf("%v<%v", r.key, r.Values().Slice()[0]))
+
+	case In:
+		sb.WriteString(fmt.Sprintf("%v %v (%v)", r.key, In, r.Values().JoinSorted(",")))
+	case NotIn:
+		sb.WriteString(fmt.Sprintf("%v %v (%v)", r.key, NotIn, r.Values().JoinSorted(",")))
+	default:
+		sb.WriteString(fmt.Sprintf("%v %v (%v)", r.key, r.operator, r.Values().JoinSorted(",")))
+	}
+
+	return sb.String()
+}
+
 // Selector is an interface for objects that can apply rules to match [Labels]
 type Selector interface {
 	// Matches returns true if the selector matches given label set.
@@ -123,10 +163,12 @@ type Selector interface {
 
 	// Requirements returns collection of Requirements to expose more selection information.
 	Requirements() (requirements Requirements, selectable bool)
+
+	String() string
 }
 
 type SimpleSelector struct {
-	requirements []Requirement
+	requirements Requirements
 }
 
 func NewSelector(requirements ...Requirement) *SimpleSelector {
@@ -151,4 +193,12 @@ func (s *SimpleSelector) Empty() bool {
 
 func (s *SimpleSelector) Requirements() (requirements Requirements, selectable bool) {
 	return s.requirements, true
+}
+
+func (s *SimpleSelector) String() string {
+	reqs := make([]string, 0, len(s.requirements))
+	for _, req := range s.requirements {
+		reqs = append(reqs, req.String())
+	}
+	return strings.Join(reqs, ",")
 }
