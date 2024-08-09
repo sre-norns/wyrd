@@ -37,24 +37,7 @@ func (l Labels) Slice() sort.StringSlice {
 	return labels
 }
 
-var subdomainNameRegexp = regexp.MustCompile(`^[a-z0-9]([a-z0-9\.\-]*[a-z0-9])?$`)
-
 var labelRegexp = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_\.\-]*[a-zA-Z0-9]$`)
-
-func ValidateSubdomainName(value string) error {
-	if len(value) > 253 {
-		return errors.New("name is too long")
-	}
-
-	// contain only lowercase alphanumeric characters, '-' or '.'
-	// start with an alphanumeric character
-	// end with an alphanumeric character
-	if !subdomainNameRegexp.MatchString(value) {
-		return errors.New("name is not a DNS subdomain name")
-	}
-
-	return nil
-}
 
 func ValidateLabelKeyName(value string) error {
 	if value == "" {

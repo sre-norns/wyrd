@@ -3,7 +3,6 @@ package manifest
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -12,24 +11,6 @@ import (
 	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
 )
-
-var (
-	// ErrUnknownKind is the error returned when the 'kind' value goes not match any previously registered type.
-	ErrUnknownKind = errors.New("unknown kind")
-	// ErrUnexpectedSpecType is an error returned when type cast of a .spec in the manifest is not possible to the expected type.
-	ErrUnexpectedSpecType = errors.New("unexpected spec type")
-	// ErrUninterfacableType is an error returned when the type being registered can not be captured by interface.
-	ErrUninterfacableType = errors.New("type can not interface")
-)
-
-// Kind represents ID of a type that can be used as a spec in a manifest
-type Kind string
-
-// KindSpec defines mapping of a manifest to types
-type KindSpec struct {
-	SpecType   reflect.Type
-	StatusType reflect.Type
-}
 
 // Registry of types that can be used in a manifest spec
 var metaKindRegistry = map[Kind]KindSpec{}
@@ -182,7 +163,7 @@ type ObjectMeta struct {
 	Version Version `form:"version,omitempty" json:"version,omitempty" yaml:"version,omitempty" xml:"version,omitempty" gorm:"default:1"`
 
 	// Name is a unique human-readable identifier of a resource
-	Name string `form:"name,omitempty" json:"name" yaml:"name" gorm:"uniqueIndex;not null;"`
+	Name ResourceName `form:"name,omitempty" json:"name" yaml:"name" gorm:"uniqueIndex;not null;"`
 	// TODO: Set null on delete? gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;
 
 	// Labels is map of string keys and values that can be used to organize and categorize
@@ -227,10 +208,10 @@ func (m ObjectMeta) Validate() error {
 	errs := ErrorSet{}
 
 	if m.Name != "" {
-		if err := ValidateSubdomainName(m.Name); err != nil {
+		if err := m.Name.ValidateSubdomainName(); err != nil {
 			errs = append(errs, err)
 		}
-	}
+	} // TODO: Should we allow empty names?
 
 	if err := m.Labels.Validate(); err != nil {
 		if errSet, ok := err.(ErrorSet); ok {

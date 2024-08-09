@@ -51,7 +51,8 @@ type Store interface {
 	Ping(context.Context) error
 
 	Create(ctx context.Context, value any, options ...Option) error
-	Get(ctx context.Context, value any, id manifest.ResourceID, options ...Option) (exists bool, err error)
+	GetByUID(ctx context.Context, value any, id manifest.ResourceID, options ...Option) (exists bool, err error)
+	GetByName(ctx context.Context, value any, id manifest.ResourceName, options ...Option) (exists bool, err error)
 	GetWithVersion(ctx context.Context, dest any, id manifest.VersionedResourceID, options ...Option) (bool, error)
 	Update(ctx context.Context, newValue any, id manifest.VersionedResourceID, options ...Option) (exists bool, err error)
 	Delete(ctx context.Context, model any, id manifest.ResourceID, version manifest.Version, options ...Option) (existed bool, err error)
@@ -79,7 +80,8 @@ type StoreTransaction interface {
 	Create(value any, options ...Option) error
 	Update(newValue any, id manifest.VersionedResourceID, options ...Option) (exists bool, err error)
 	Delete(model any, id manifest.ResourceID, version manifest.Version, options ...Option) (existed bool, err error)
-	Get(value any, id manifest.ResourceID, options ...Option) (exists bool, err error)
+	GetByUID(destValue any, id manifest.ResourceID, options ...Option) (exists bool, err error)
+	GetByName(destValue any, id manifest.ResourceName, options ...Option) (exists bool, err error)
 
 	AddLinked(value any, link string, owner any, options ...Option) error
 	RemoveLinked(model any, link string, owner any) error

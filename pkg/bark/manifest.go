@@ -11,7 +11,8 @@ import (
 // ResourceRequest represents information to identify a single resource being referred in the path / query
 type (
 	ResourceRequest struct {
-		ID manifest.ResourceID `uri:"id" form:"id" binding:"required"`
+		ID string `uri:"id" form:"id" binding:"required"`
+		// 		ID manifest.ResourceID `uri:"id" form:"id" binding:"required"`
 	}
 
 	// VersionQuery is a set of query params for the versioned resource,
@@ -86,7 +87,13 @@ func ResourceAPI() gin.HandlerFunc {
 // RequireResourceID return [manifest.ResourceID] previously extracted by [ResourceAPI] middleware, containing ID of the requested resource from the path.
 // Note: must be used from a request handler that follows [ResourceAPI] middleware in the call chain.
 func RequireResourceID(ctx *gin.Context) manifest.ResourceID {
-	return ctx.MustGet(resourceIDKey).(ResourceRequest).ID
+	return manifest.ResourceID(ctx.MustGet(resourceIDKey).(ResourceRequest).ID)
+}
+
+// RequireResourceName return [manifest.ResourceName] previously extracted by [ResourceAPI] middleware, containing a Name of the requested resource from the path.
+// Note: must be used from a request handler that follows [ResourceAPI] middleware in the call chain.
+func RequireResourceName(ctx *gin.Context) manifest.ResourceName {
+	return manifest.ResourceName(ctx.MustGet(resourceIDKey).(ResourceRequest).ID)
 }
 
 // VersionedResourceAPI returns middleware that reads Resource ID and Version query parameter
@@ -102,7 +109,7 @@ func VersionedResourceAPI() gin.HandlerFunc {
 		}
 
 		if resourceID, ok := ctx.Get(resourceIDKey); ok {
-			ctx.Set(versionedIDKey, manifest.NewVersionedID(resourceID.(ResourceRequest).ID, versionInfo.Version))
+			ctx.Set(versionedIDKey, manifest.NewVersionedID(manifest.ResourceID(resourceID.(ResourceRequest).ID), versionInfo.Version))
 		}
 
 		ctx.Set(versionInfoKey, versionInfo)

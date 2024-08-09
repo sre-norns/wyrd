@@ -3,26 +3,10 @@ package manifest
 import (
 	"fmt"
 	"reflect"
-	"strconv"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
-
-// Version type to represent monotonically orderly versions of a single managed resource.
-type Version uint64
-
-// String returns string representation of the [Version] value
-func (v Version) String() string {
-	return strconv.FormatUint(uint64(v), 10)
-}
-
-// ResourceID type represents unique Identifier of a resource in some namespace, duh!
-// type ResourceID uuid.UUID
-type ResourceID string
-
-// InvalidResourceID represents nil value of a [ResourceID] which does not referrers to any resource in a system.
-var InvalidResourceID ResourceID = ResourceID("")
 
 var (
 	ErrNilSpec           = fmt.Errorf(".spec is nil")
@@ -185,7 +169,7 @@ func (r *ResourceModel[SpecType]) BeforeCreate(tx *gorm.DB) (err error) {
 	}
 
 	if r.Name == "" {
-		r.Name = string(r.UID)
+		r.Name = ResourceName(r.UID)
 	}
 
 	return

@@ -36,8 +36,16 @@ func (tx *gormStoreTransaction) Update(newValue any, id manifest.VersionedResour
 	return rx.RowsAffected == 1, rx.Error
 }
 
-func (tx *gormStoreTransaction) Get(dest any, id manifest.ResourceID, options ...Option) (exists bool, err error) {
+func (tx *gormStoreTransaction) GetByUID(dest any, id manifest.ResourceID, options ...Option) (bool, error) {
 	rx := applyOptions(tx.db, dest, options...).First(dest, id)
+	if errors.Is(rx.Error, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+	return rx.RowsAffected == 1, rx.Error
+}
+
+func (tx *gormStoreTransaction) GetByName(dest any, name manifest.ResourceName, options ...Option) (bool, error) {
+	rx := applyOptions(tx.db, dest, options...).Where("name = ?", name).First(dest)
 	if errors.Is(rx.Error, gorm.ErrRecordNotFound) {
 		return false, nil
 	}

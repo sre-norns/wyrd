@@ -169,8 +169,12 @@ func (s *DBStore) RemoveLinked(ctx context.Context, value any, link string, owne
 	return s.singleTransaction(ctx).RemoveLinked(value, link, owner)
 }
 
-func (s *DBStore) Get(ctx context.Context, dest any, id manifest.ResourceID, options ...Option) (bool, error) {
-	return s.singleTransaction(ctx).Get(dest, id, options...)
+func (s *DBStore) GetByUID(ctx context.Context, dest any, id manifest.ResourceID, options ...Option) (bool, error) {
+	return s.singleTransaction(ctx).GetByUID(dest, id, options...)
+}
+
+func (s *DBStore) GetByName(ctx context.Context, dest any, id manifest.ResourceName, options ...Option) (bool, error) {
+	return s.singleTransaction(ctx).GetByName(dest, id, options...)
 }
 
 func (s *DBStore) GetWithVersion(ctx context.Context, dest any, id manifest.VersionedResourceID, options ...Option) (bool, error) {
