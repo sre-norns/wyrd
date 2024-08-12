@@ -56,7 +56,7 @@ type Store interface {
 	GetWithVersion(ctx context.Context, dest any, id manifest.VersionedResourceID, options ...Option) (bool, error)
 	Update(ctx context.Context, newValue any, id manifest.VersionedResourceID, options ...Option) (exists bool, err error)
 	Delete(ctx context.Context, model any, id manifest.ResourceID, version manifest.Version, options ...Option) (existed bool, err error)
-	Restore(ctx context.Context, model any, id manifest.ResourceID) (existed bool, err error)
+	Restore(ctx context.Context, model any, id manifest.ResourceID, options ...Option) (existed bool, err error)
 
 	AddLinked(ctx context.Context, value any, link string, owner any, options ...Option) error
 	RemoveLinked(ctx context.Context, value any, link string, owner any) error

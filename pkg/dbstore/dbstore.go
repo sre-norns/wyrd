@@ -70,16 +70,16 @@ func applyOptions(tx *gorm.DB, value any, options ...Option) *gorm.DB {
 		tContext = o(value, tContext)
 	}
 
+	if tContext.unScoped {
+		tx = tx.Unscoped()
+	}
+
 	for omit := range tContext.Omit {
 		tx = tx.Omit(omit)
 	}
 
 	for expand := range tContext.Expand {
 		tx = tx.Preload(expand)
-	}
-
-	if tContext.unScoped {
-		tx = tx.Unscoped()
 	}
 
 	return tx
@@ -194,8 +194,8 @@ func (s *DBStore) Delete(ctx context.Context, value any, id manifest.ResourceID,
 	return s.singleTransaction(ctx).Delete(value, id, version, options...)
 }
 
-func (s *DBStore) Restore(ctx context.Context, model any, id manifest.ResourceID) (existed bool, err error) {
-	return s.singleTransaction(ctx).Restore(model, id)
+func (s *DBStore) Restore(ctx context.Context, model any, id manifest.ResourceID, options ...Option) (existed bool, err error) {
+	return s.singleTransaction(ctx).Restore(model, id, options...)
 }
 
 func (s *DBStore) Find(ctx context.Context, resources any, searchQuery manifest.SearchQuery, options ...Option) (int64, error) {

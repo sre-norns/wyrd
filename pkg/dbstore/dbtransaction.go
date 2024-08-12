@@ -64,8 +64,8 @@ func (tx *gormStoreTransaction) Delete(value any, id manifest.ResourceID, versio
 	return rx.RowsAffected == 1, rx.Error
 }
 
-func (tx *gormStoreTransaction) Restore(model any, id manifest.ResourceID) (existed bool, err error) {
-	rx := tx.db.Model(model).Where(fmt.Sprintf("%s = ?", tx.config.IDColumnName), id).Where(fmt.Sprintf("%s IS NOT NULL", tx.config.DeletedAtColumnName)).Update(tx.config.DeletedAtColumnName, nil)
+func (tx *gormStoreTransaction) Restore(model any, id manifest.ResourceID, options ...Option) (existed bool, err error) {
+	rx := applyOptions(tx.db.Model(model).Unscoped(), nil, options...).Where(fmt.Sprintf("%s = ?", tx.config.IDColumnName), id).Where(fmt.Sprintf("%s IS NOT NULL", tx.config.DeletedAtColumnName)).Update(tx.config.DeletedAtColumnName, nil)
 	if errors.Is(rx.Error, gorm.ErrRecordNotFound) {
 		return false, nil
 	}
