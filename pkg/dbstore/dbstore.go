@@ -150,15 +150,12 @@ func (s *DBStore) Create(ctx context.Context, value any, options ...Option) erro
 
 func (s *DBStore) FindLinked(ctx context.Context, dest any, link string, owner any, searchQuery manifest.SearchQuery, options ...Option) (totalCount int64, err error) {
 	tx := applyOptions(s.db.Model(owner).WithContext(ctx), dest, options...)
-	tx, err = withSelector(tx, s.config.LabelsColumnName, s.config.CreatedAtColumnName, searchQuery)
+	tx, xtx, err := withQuery(tx, s.config.LabelsColumnName, s.config.CreatedAtColumnName, searchQuery)
 	if err != nil {
 		return
 	}
 
-	association := tx.Association(link)
-	err = association.Find(dest)
-
-	return association.Count(), err
+	return xtx.Association(link).Count(), tx.Association(link).Find(dest)
 }
 
 func (s *DBStore) AddLinked(ctx context.Context, value any, link string, owner any, options ...Option) error {
@@ -198,11 +195,15 @@ func (s *DBStore) Restore(ctx context.Context, model any, id manifest.ResourceID
 	return s.singleTransaction(ctx).Restore(model, id, options...)
 }
 
-func (s *DBStore) Find(ctx context.Context, resources any, searchQuery manifest.SearchQuery, options ...Option) (int64, error) {
+func (s *DBStore) Find(ctx context.Context, resources any, searchQuery manifest.SearchQuery, options ...Option) (total int64, err error) {
 	tx := applyOptions(s.db.WithContext(ctx), resources, options...)
-	tx, err := withSelector(tx, s.config.LabelsColumnName, s.config.CreatedAtColumnName, searchQuery)
+	tx, xtx, err := withQuery(tx, s.config.LabelsColumnName, s.config.CreatedAtColumnName, searchQuery)
 	if err != nil {
 		return 0, err
+	}
+
+	if err = xtx.Model(resources).Count(&total).Error; err != nil {
+		return total, err
 	}
 
 	rtx := tx.Order(
@@ -211,15 +212,7 @@ func (s *DBStore) Find(ctx context.Context, resources any, searchQuery manifest.
 			Desc:   true,
 		}).Find(resources)
 
-	// log.Print("[DEBUG] SQL: ", tx.ToSQL(func(tx *gorm.DB) *gorm.DB {
-	// 	for _, c := range qs {
-	// 		tx = tx.Where(c)
-	// 	}
-	// 	return tx.Find(&[]Scenario{})
-	// 	return rtx
-	// }))
-
-	return rtx.RowsAffected, rtx.Error
+	return total, rtx.Error
 }
 
 func (s *DBStore) FindNames(ctx context.Context, model any, searchQuery manifest.SearchQuery, options ...Option) (manifest.StringSet, error) {
@@ -283,22 +276,13 @@ func (s *DBStore) FindLabels(ctx context.Context, model any, searchQuery manifes
 	return result, rtx.Error
 }
 
-func withSelector(tx *gorm.DB, jcolumn, timeColumn string, query manifest.SearchQuery) (*gorm.DB, error) {
-	// Apply offset and limit to the query
-	tx = limitedQuery(tx, query)
-
-	// Apply name matcher if any
-	tx = matchName(tx, "name", query)
-
-	// Apply time-range limit
-	tx = limitTimeRange(tx, timeColumn, query.FromTime, query.TillTime)
-
+func withSelector(tx *gorm.DB, jcolumn string, selector manifest.Selector) (*gorm.DB, error) {
 	// Convert Label-based selector to the SQL query
-	if query.Selector == nil {
+	if selector == nil {
 		return tx, nil
 	}
 
-	reqs, ok := query.Selector.Requirements()
+	reqs, ok := selector.Requirements()
 	if !ok { // Selector has no requirements, easy way out
 		return nil, manifest.ErrNonSelectableRequirements
 	}
@@ -366,4 +350,17 @@ func withSelector(tx *gorm.DB, jcolumn, timeColumn string, query manifest.Search
 	}
 
 	return tx, nil
+}
+
+func withQuery(tx *gorm.DB, jcolumn, timeColumn string, query manifest.SearchQuery) (selecting *gorm.DB, counting *gorm.DB, err error) {
+	// Apply name matcher if any
+	tx = matchName(tx, "name", query)
+
+	// Apply time-range limit
+	tx = limitTimeRange(tx, timeColumn, query.FromTime, query.TillTime)
+
+	tx, err = withSelector(tx, jcolumn, query.Selector)
+
+	// Apply offset and limit to the query
+	return limitedQuery(tx, query), tx, err
 }

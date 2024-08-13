@@ -44,9 +44,9 @@ type (
 
 	// PaginatedResponse represents common frame used to produce response that returns a collection of results
 	PaginatedResponse[T any] struct {
-		Total int `form:"total" json:"total,omitempty" yaml:"total,omitempty" xml:"total"`
-		Count int `form:"count" json:"count,omitempty" yaml:"count,omitempty" xml:"count"`
-		Data  []T `form:"data" json:"data,omitempty" yaml:"data,omitempty" xml:"data"`
+		Total int64 `form:"total" json:"total,omitempty" yaml:"total,omitempty" xml:"total"`
+		Count int   `form:"count" json:"count,omitempty" yaml:"count,omitempty" xml:"count"`
+		Data  []T   `form:"data" json:"data,omitempty" yaml:"data,omitempty" xml:"data"`
 
 		manifest.HResponse `form:",inline" json:",inline" yaml:",inline"`
 		Pagination         `form:",inline" json:",inline" yaml:",inline"`
@@ -195,7 +195,7 @@ func (s SearchParams) BuildQuery(defaultLimit uint) (manifest.SearchQuery, error
 }
 
 // NewPaginatedResponse creates a new paginated response with options to adjust HATEOAS response params
-func NewPaginatedResponse[T any](items []T, total int, pInfo Pagination, options ...HResponseOption) PaginatedResponse[T] {
+func NewPaginatedResponse[T any](items []T, total int64, pInfo Pagination, options ...HResponseOption) PaginatedResponse[T] {
 	result := PaginatedResponse[T]{
 		Data:       items,
 		Total:      total,

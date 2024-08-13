@@ -129,7 +129,7 @@ func MaybeGotOne(ctx *gin.Context, resource any, exists bool, err error) {
 }
 
 // Found is a shortcut to produce 200/Ok response for paginated data using [NewPaginatedResponse] to wrap items into Pagination frame.
-func Found[T any](ctx *gin.Context, results []T, total int, options ...HResponseOption) {
+func Found[T any](ctx *gin.Context, results []T, total int64, options ...HResponseOption) {
 	searchParams := RequireSearchQueryParams(ctx)
 
 	if ctx.Request.URL != nil {
@@ -162,7 +162,7 @@ func Found[T any](ctx *gin.Context, results []T, total int, options ...HResponse
 }
 
 // FoundOrNot checks error value and response with error or using [Found] function if no error.
-func FoundOrNot[T any](ctx *gin.Context, err error, results []T, total int, options ...HResponseOption) {
+func FoundOrNot[T any](ctx *gin.Context, err error, results []T, total int64, options ...HResponseOption) {
 	if err != nil {
 		AbortWithError(ctx, http.StatusBadRequest, err)
 		return

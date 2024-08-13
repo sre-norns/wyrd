@@ -144,7 +144,7 @@ func TestNewPaginatedResponse(t *testing.T) {
 	}
 	type paginationInputs struct {
 		items          []testValue
-		totalCount     int
+		totalCount     int64
 		paginationInfo bark.Pagination
 		options        []bark.HResponseOption
 	}

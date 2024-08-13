@@ -61,7 +61,7 @@ type Store interface {
 	AddLinked(ctx context.Context, value any, link string, owner any, options ...Option) error
 	RemoveLinked(ctx context.Context, value any, link string, owner any) error
 
-	Find(ctx context.Context, dest any, searchQuery manifest.SearchQuery, options ...Option) (count int64, err error)
+	Find(ctx context.Context, dest any, searchQuery manifest.SearchQuery, options ...Option) (total int64, err error)
 	FindLinked(ctx context.Context, dest any, link string, owner any, searchQuery manifest.SearchQuery, options ...Option) (totalCount int64, err error)
 
 	FindNames(ctx context.Context, model any, searchQuery manifest.SearchQuery, options ...Option) (manifest.StringSet, error)
