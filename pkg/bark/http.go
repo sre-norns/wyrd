@@ -48,8 +48,14 @@ var (
 	// ErrWrongKind error indicates that [manifest.Kind] passed to an endpoint is not expected by that endpoint.
 	ErrWrongKind = fmt.Errorf("invalid resource kind for the API")
 
+	// ErrResourceUnauthorized represents error response when requester is not authorized to access a resource.
+	ErrResourceUnauthorized = &ErrorResponse{Code: http.StatusUnauthorized, Message: "resource access unauthorized"}
+	// ErrForbidden represents error response when requester don't have permission to access given resource.
+	ErrForbidden = &ErrorResponse{Code: http.StatusForbidden, Message: "forbidden"}
 	// ErrResourceNotFound represents error response when requested resource not found.
 	ErrResourceNotFound = &ErrorResponse{Code: http.StatusNotFound, Message: "requested resource not found"}
+	// ErrResourceVersionConflict represents error response when there is a conflict between resource versions.
+	ErrResourceVersionConflict = &ErrorResponse{Code: http.StatusConflict, Message: "resource version conflict"}
 
 	// ErrNotAcceptableMediaType error indicates that value(s) of [Accept](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept) headers passed by a client in a request are not support by the API / endpoint.
 	ErrNotAcceptableMediaType = &ErrorResponse{Code: http.StatusNotAcceptable, Message: "server cannot produce a response matching the list of acceptable values"}

@@ -155,7 +155,15 @@ func (s *DBStore) FindLinked(ctx context.Context, dest any, link string, owner a
 		return
 	}
 
-	return xtx.Association(link).Count(), tx.Association(link).Find(dest)
+	// Note, don't simply the following as order matters here
+	err = tx.Association(link).Find(dest)
+	if err != nil {
+		return
+	}
+
+	totalCount = xtx.Association(link).Count()
+
+	return
 }
 
 func (s *DBStore) AddLinked(ctx context.Context, value any, link string, owner any, options ...Option) error {
