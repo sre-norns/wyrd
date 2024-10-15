@@ -155,16 +155,17 @@ type TypeMeta struct {
 
 // ObjectMeta represents common information about resources managed by a service.
 type ObjectMeta struct {
-	// System generated unique identified of this object
+	// UID is a system generated unique identified of this instance of an object.
+	// see https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
 	UID ResourceID `form:"uid,omitempty" json:"uid,omitempty" yaml:"uid,omitempty" gorm:"primaryKey;not null;type:uuid"`
 
-	// A sequence number representing a specific generation of the resource.
+	// Version is a sequence number representing a specific generation of the resource.
 	// Populated by the system. Read-only.
 	Version Version `form:"version,omitempty" json:"version,omitempty" yaml:"version,omitempty" xml:"version,omitempty" gorm:"default:1"`
 
-	// Name is a unique human-readable identifier of a resource
-	Name ResourceName `form:"name,omitempty" json:"name" yaml:"name" gorm:"uniqueIndex;not null;"`
-	// TODO: Set null on delete? gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL;
+	// Name is a unique identifier of a resource provided by the resource owner.
+	// see: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/
+	Name ResourceName `form:"name,omitempty" json:"name" yaml:"name" gorm:"index:idx_name;index:,unique,composite:deleted_name;not null"`
 
 	// Labels is map of string keys and values that can be used to organize and categorize
 	// (scope and select) resources.
@@ -182,7 +183,7 @@ type ObjectMeta struct {
 	// This time is recorded to implement 'tombstones' - objects content may be deleted, while the record of its deletion is retained.
 	// It is populated by the system and clients may not set this value.
 	// Read-only.
-	DeletedAt *gorm.DeletedAt `form:"deletionTimestamp,omitempty" json:"deletionTimestamp,omitempty" yaml:"deletionTimestamp,omitempty" xml:"deletionTimestamp,omitempty" gorm:"index"`
+	DeletedAt *gorm.DeletedAt `form:"deletionTimestamp,omitempty" json:"deletionTimestamp,omitempty" yaml:"deletionTimestamp,omitempty" xml:"deletionTimestamp,omitempty" gorm:"index:,composite:deleted_name_name,option:NULLS NOT DISTINCT"`
 }
 
 func (m *ObjectMeta) BeforeCreate(tx *gorm.DB) (err error) {
