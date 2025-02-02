@@ -62,8 +62,9 @@ func TestManifestMarshaling_JSON(t *testing.T) {
 
 func TestManifestUnmarshaling_JSON(t *testing.T) {
 	type TestSpec struct {
-		Value int    `json:"value"`
-		Name  string `json:"name"`
+		Value        int                    `json:"value"`
+		Name         string                 `json:"name"`
+		Requirements manifest.LabelSelector `json:"requirements"`
 	}
 
 	testKind := manifest.Kind("testSpec")
@@ -120,6 +121,30 @@ func TestManifestUnmarshaling_JSON(t *testing.T) {
 			expectError: true,
 			given:       `{"kind":"testSpec", "metadata":{"name":""},"spec":{"value":1,"name":"life"},"status":{"name":"daily","data":[1,2,3]}}`,
 		},
+		"basic_w_requirements": {
+			expect: manifest.ResourceManifest{
+				TypeMeta: manifest.TypeMeta{
+					Kind: testKind,
+				},
+				Metadata: manifest.ObjectMeta{
+					Name: "test-spec-1",
+				},
+				Spec: &TestSpec{
+					Value: 42,
+					Requirements: manifest.LabelSelector{
+						MatchLabels: manifest.Labels{
+							"cloud":    "ok",
+							"labelled": "sure",
+						},
+					},
+				},
+			},
+			given: `{"kind":"testSpec","metadata":{"name":"test-spec-1"},"spec":{"value":42,"requirements":{"matchLabels": {"cloud":"ok","labelled":"sure"}}}}`,
+		},
+		"basic_w_requirements_format_err": {
+			expectError: true,
+			given:       `{"kind":"testSpec","metadata":{"name":"test-spec-1"},"spec":{"value":42,"requirements":{"cloud":"ok","labelled":"sure"}}}`,
+		},
 	}
 
 	for name, tc := range testCases {
@@ -127,6 +152,7 @@ func TestManifestUnmarshaling_JSON(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			var got manifest.ResourceManifest
 			err := json.Unmarshal([]byte(test.given), &got)
+
 			if test.expectError {
 				require.Error(t, err, "expected error: %v", test.expectError)
 			} else {
@@ -734,65 +760,6 @@ func TestStatefulManifestUnmarshaling_JSON(t *testing.T) {
 				},
 			},
 			given: `{"kind":"testSpec","metadata":{"name":"test-spec"},"spec":{"value":42,"name":"meaning"},"status":{"name":"daily","data":[5,7,3]}}`,
-		},
-	}
-
-	for name, tc := range testCases {
-		test := tc
-		t.Run(name, func(t *testing.T) {
-			var got manifest.ResourceManifest
-			err := json.Unmarshal([]byte(test.given), &got)
-			if test.expectError {
-				require.Error(t, err, "expected error: %v", test.expectError)
-			} else {
-				require.NoError(t, err, "expected error: %v", test.expectError)
-				require.Equal(t, test.expect, got)
-			}
-		})
-	}
-}
-
-func TestManifestUnmarshaling_Specless_JSON(t *testing.T) {
-	type TestStatus struct {
-		Name string `json:"name"`
-		Data []int  `json:"data"`
-	}
-
-	testKind := manifest.Kind("TestKind")
-	require.NoError(t, manifest.RegisterManifest(testKind, nil, &TestStatus{}))
-	defer manifest.UnregisterKind(testKind)
-
-	testCases := map[string]struct {
-		expect      manifest.ResourceManifest
-		given       string
-		expectError bool
-	}{
-		"nothing": {
-			given: `{"kind":"TestKind","metadata":{"name":""}}`,
-			expect: manifest.ResourceManifest{
-				TypeMeta: manifest.TypeMeta{
-					Kind: testKind,
-				},
-			},
-		},
-		"spurious-spec": {
-			given:       `{"kind":"TestKind","metadata":{"name":"test-spec"},"spec":{"value":42,"name":"meaning"},"status":{"name":"daily","data":[5,7,3]}}`,
-			expectError: true,
-		},
-		"basic": {
-			given: `{"kind":"TestKind","metadata":{"name":"test-spec"},"status":{"name":"daily","data":[5,7,3]}}`,
-			expect: manifest.ResourceManifest{
-				TypeMeta: manifest.TypeMeta{
-					Kind: testKind,
-				},
-				Metadata: manifest.ObjectMeta{
-					Name: "test-spec",
-				},
-				Status: &TestStatus{
-					Name: "daily",
-					Data: []int{5, 7, 3},
-				},
-			},
 		},
 	}
 

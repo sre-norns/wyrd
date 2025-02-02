@@ -22,7 +22,7 @@ func ExemplarType(spec any) (reflect.Type, error) {
 
 	val := reflect.ValueOf(spec)
 	if !val.CanInterface() {
-		return nil, fmt.Errorf("%q %w", val.Type(), ErrUninterfacableType)
+		return nil, fmt.Errorf("%q %w", val.Type(), ErrUninterfacebleType)
 	}
 
 	t := val.Type()
@@ -56,6 +56,10 @@ func RegisterManifest(kind Kind, spec, status any) error {
 	statusType, err := ExemplarType(status)
 	if err != nil {
 		return err
+	}
+
+	if specType == nil {
+		return ErrUnexpectedSpecType
 	}
 
 	metaKindRegistry[kind] = KindSpec{
@@ -236,7 +240,7 @@ type ResourceManifest struct {
 	HResponse `json:",inline" yaml:",inline"`
 }
 
-// MarshalJSON is an implementation of golang [encoding/json.Marshaler] interface
+// MarshalJSON implements golang [encoding/json.Marshaler] interface for ResourceManifest
 func (s ResourceManifest) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
 		TypeMeta `json:",inline"`

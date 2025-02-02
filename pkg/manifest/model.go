@@ -15,12 +15,6 @@ var (
 	ErrStatusTypeInvalid = fmt.Errorf("invalid manifest .status type")
 )
 
-// String returns string representation of the [ResourceID] value
-// func (r ResourceID) String() string {
-// 	// return strconv.FormatInt(int64(r), 10)
-// 	// return uuid.UUID(r).String()
-// }
-
 // VersionedResourceID represents some versioned resources when its required to know not only UUID but exact version of it.
 type VersionedResourceID struct {
 	ID      ResourceID `form:"id" json:"id" yaml:"id" xml:"id"`
@@ -77,6 +71,7 @@ func ToManifest[SpecType any](r ResourceModel[SpecType]) ResourceManifest {
 		Spec:     &spec,
 	}
 }
+
 func ToManifestWithStatus[SpecType, StatusType any](r StatefulResource[SpecType, StatusType]) ResourceManifest {
 	spec := r.Spec
 	status := r.Status
@@ -100,13 +95,9 @@ func ManifestAsResource[SpecType any](newEntry ResourceManifest) (ResourceModel[
 		return result, fmt.Errorf("%w: %q", ErrUnknownKind, newEntry.Kind)
 	}
 
-	if manifestSpec.SpecType != nil && newEntry.Spec == nil {
-		return result, ErrNilSpec
-	}
 	if manifestSpec.SpecType == nil && newEntry.Spec != nil {
-		return result, fmt.Errorf("%w: expected nill .spec", ErrSpecTypeInvalid)
+		return result, fmt.Errorf("%w: expected nil .spec", ErrSpecTypeInvalid)
 	}
-
 	// TODO: Can we cast base on manifestSpec.SpecType?
 	if manifestSpec.SpecType != nil && newEntry.Spec != nil {
 		if spec, ok := newEntry.Spec.(*SpecType); !ok {
@@ -130,31 +121,39 @@ func ManifestAsStatefulResource[SpecType, StatusType any](newEntry ResourceManif
 		return result, fmt.Errorf("%w: %q", ErrUnknownKind, newEntry.Kind)
 	}
 
-	if manifestSpec.SpecType != nil && newEntry.Spec == nil {
-		return result, ErrNilSpec
-	}
 	if manifestSpec.SpecType == nil && newEntry.Spec != nil {
 		return result, ErrSpecTypeInvalid
 	}
-
-	if manifestSpec.StatusType != nil && newEntry.Status == nil {
-		return result, ErrNilStatus
-	}
-	if manifestSpec.StatusType == nil && newEntry.Status != nil {
-		return result, ErrStatusTypeInvalid
-	}
-
 	if manifestSpec.SpecType != nil && newEntry.Spec != nil {
-		if spec, ok := newEntry.Status.(*SpecType); !ok {
-			return result, ErrSpecTypeInvalid
+		if spec, ok := newEntry.Spec.(*SpecType); !ok {
+			return result, fmt.Errorf("%w; expected: %q, got %q",
+				ErrSpecTypeInvalid,
+				manifestSpec.SpecType,
+				reflect.TypeOf(newEntry.Spec),
+			)
 		} else {
 			result.Spec = *spec
 		}
 	}
 
+	// if manifestSpec.StatusType != nil && newEntry.Status == nil {
+	// 	return result, ErrNilStatus
+	// }
+	if manifestSpec.StatusType == nil && newEntry.Status != nil {
+		return result, fmt.Errorf("%w: %q does not declares status type", ErrStatusTypeInvalid, newEntry.Kind)
+	}
+	// Note: this means status type can not be converted out of a manifest
+	// if newEntry.Status != nil {
+	// 	return result, ErrStatusTypeInvalid
+	// }
+
 	if manifestSpec.StatusType != nil && newEntry.Status != nil {
 		if status, ok := newEntry.Status.(*StatusType); !ok {
-			return result, ErrStatusTypeInvalid
+			return result, fmt.Errorf("%w; expected: %q, got %q",
+				ErrStatusTypeInvalid,
+				manifestSpec.SpecType,
+				reflect.TypeOf(newEntry.Status),
+			)
 		} else {
 			result.Status = *status
 		}

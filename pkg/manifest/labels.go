@@ -8,6 +8,15 @@ import (
 	"strings"
 )
 
+var (
+	ErrNameIsEmpty = errors.New("name is empty")
+
+	ErrKeyNameEmpty   = fmt.Errorf("key %w", ErrNameIsEmpty)
+	ErrKeyNameTooLong = fmt.Errorf("key %w", ErrNameTooLong)
+
+	ErrLabelValueTooLong = errors.New("label value is too long")
+)
+
 // Labels represent a set of key-value pairs associated with a resource.
 // Interface is intensionally compatible with [k8s.io/apimachinery/pkg/labels.Set]
 type Labels map[string]string
@@ -37,15 +46,15 @@ func (l Labels) Slice() sort.StringSlice {
 	return labels
 }
 
-var labelRegexp = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_\.\-]*[a-zA-Z0-9]$`)
+var labelRegexp = regexp.MustCompile(`^[[:alnum:]]$|^[a-zA-Z0-9][a-zA-Z0-9_\.\-]*[a-zA-Z0-9]$`)
 
 func ValidateLabelKeyName(value string) error {
 	if value == "" {
-		return errors.New("key name can not be empty")
+		return ErrKeyNameEmpty
 	}
 
 	if len(value) > 63 {
-		return errors.New("key name is too long")
+		return ErrKeyNameTooLong
 	}
 
 	if !labelRegexp.MatchString(value) {
@@ -61,43 +70,46 @@ func ValidateLabelKeyPrefix(value string) error {
 
 func ValidateLabelKey(value string) error {
 	if value == "" {
-		return errors.New("value can not be empty")
+		return ErrKeyNameEmpty
 	}
 
 	parts := strings.Split(value, "/")
 	if len(parts) > 2 {
-		return errors.New("key can not contain extra '/' in the name")
-	}
-
-	if len(parts) == 2 {
+		return fmt.Errorf("label key %v can not contain extra '/' in the name", value)
+	} else if len(parts) == 2 {
 		invalidPrefix := ValidateLabelKeyPrefix(parts[0])
 		invalidName := ValidateLabelKeyName(parts[1])
+
 		if invalidPrefix != nil && invalidName == nil {
-			return invalidPrefix
+			return fmt.Errorf("label %v prefix %w", value, invalidPrefix)
 		} else if invalidPrefix == nil && invalidName != nil {
-			return invalidName
+			return fmt.Errorf("label %v name-part %w", value, invalidName)
 		} else if invalidPrefix != nil && invalidName != nil {
-			return fmt.Errorf("%w And %v", invalidPrefix, invalidName)
+			return fmt.Errorf("label %v: prefix %v AND name-part %v", value, invalidPrefix, invalidName)
 		}
 
 		return nil
 	}
 
-	return ValidateLabelKeyName(parts[0])
+	if invalidName := ValidateLabelKeyName(parts[0]); invalidName != nil {
+		return fmt.Errorf("label %v name-part %w", value, invalidName)
+	}
+
+	return nil
 }
 
-func ValidateLabelValue(value string) error {
+func ValidateLabelValue(key, value string) error {
 	// Empty value is valid
 	if value == "" {
 		return nil
 	}
 
 	if len(value) > 63 {
-		return errors.New("value is too long")
+		return fmt.Errorf("%v %w", key, ErrLabelValueTooLong)
 	}
 
 	if !labelRegexp.MatchString(value) {
-		return errors.New("value is not valid")
+		return fmt.Errorf("label %q value is not valid, doesn't match regex %q", key, labelRegexp)
 	}
 
 	return nil
@@ -109,7 +121,7 @@ func (l Labels) Validate() error {
 		if err := ValidateLabelKey(key); err != nil {
 			errs = append(errs, err)
 		}
-		if err := ValidateLabelValue(value); err != nil {
+		if err := ValidateLabelValue(key, value); err != nil {
 			errs = append(errs, err)
 		}
 	}

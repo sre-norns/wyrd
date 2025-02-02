@@ -6,6 +6,11 @@ import (
 	"strconv"
 )
 
+var (
+	ErrNameTooLong    = errors.New("name is too long")
+	ErrNameNotDNSname = errors.New("name is not a DNS subdomain name")
+)
+
 // Version type to represent monotonically orderly versions of a single managed resource.
 type Version uint64
 
@@ -28,14 +33,14 @@ var subdomainNameRegexp = regexp.MustCompile(`^[a-z0-9]([a-z0-9\.\-]*[a-z0-9])?$
 
 func ValidateSubdomainName(value string) error {
 	if len(value) > 253 {
-		return errors.New("name is too long")
+		return ErrNameTooLong
 	}
 
 	// contain only lowercase alphanumeric characters, '-' or '.'
 	// start with an alphanumeric character
 	// end with an alphanumeric character
 	if !subdomainNameRegexp.MatchString(value) {
-		return errors.New("name is not a DNS subdomain name")
+		return ErrNameNotDNSname
 	}
 
 	return nil

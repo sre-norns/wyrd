@@ -19,6 +19,6 @@ var (
 	ErrUnknownKind = errors.New("unknown kind")
 	// ErrUnexpectedSpecType is an error returned when type cast of a .spec in the manifest is not possible to the expected type.
 	ErrUnexpectedSpecType = errors.New("unexpected spec type")
-	// ErrUninterfacableType is an error returned when the type being registered can not be captured by interface.
-	ErrUninterfacableType = errors.New("type can not interface")
+	// ErrUninterfacebleType is an error returned when the type being registered can not be captured by interface.
+	ErrUninterfacebleType = errors.New("type can not interface")
 )

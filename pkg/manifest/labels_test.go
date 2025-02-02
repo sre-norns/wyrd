@@ -1,6 +1,7 @@
 package manifest_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -465,6 +466,42 @@ func TestParseSelector(t *testing.T) {
 	}
 }
 
+func TesLabelSelector_Parsing(t *testing.T) {
+	testCases := map[string]struct {
+		expect      manifest.LabelSelector
+		given       string
+		expectError bool
+	}{
+		"basic": {
+			given: `{"matchLabels":{"os":"linux"},"matchSelector":{"key":"env","operator":"NotIn","values":["dev","testing"]}}`,
+			expect: manifest.LabelSelector{
+				MatchLabels: manifest.Labels{
+					"os": "linux",
+				},
+				MatchSelector: manifest.SelectorRules{
+					{Key: "env", Op: manifest.LabelSelectorOpIn, Values: []string{"dev", "testing"}},
+				},
+			},
+		},
+	}
+
+	for name, tc := range testCases {
+		test := tc
+		t.Run(name, func(t *testing.T) {
+			var got manifest.LabelSelector
+			err := json.Unmarshal([]byte(tc.given), &got)
+
+			if test.expectError {
+				require.Error(t, err, "expected error: %v", test.expectError)
+			} else {
+				require.NoError(t, err, "unexpected error")
+			}
+
+			require.Equal(t, test.expect, got)
+		})
+	}
+}
+
 func TestValidateSubdmainName(t *testing.T) {
 	testCases := map[string]struct {
 		given       string
@@ -613,6 +650,10 @@ func TestValidateLabelValue(t *testing.T) {
 		"simple-value-ok": {given: "value"},
 		"domain.name":     {given: "app.kubernetes.io"},
 		"numbers":         {given: "321"},
+		"version.1":       {given: "v8"},
+		"version.2":       {given: "v8.3"},
+		"version.3":       {given: "v.8.3"},
+		"single-number":   {given: "3"},
 
 		"no-negative-numbers?":   {given: "-321", expectError: true},
 		"no-spaces in between":   {given: "value with spaces", expectError: true},
@@ -620,13 +661,14 @@ func TestValidateLabelValue(t *testing.T) {
 		"no-spaces at the end":   {given: "value ", expectError: true},
 	}
 
-	for name, tc := range testCases {
+	for k, tc := range testCases {
 		test := tc
+		name := k
 		t.Run(name, func(t *testing.T) {
 			if test.expectError {
-				require.Error(t, manifest.ValidateLabelValue(test.given))
+				require.Error(t, manifest.ValidateLabelValue(name, test.given))
 			} else {
-				require.NoError(t, manifest.ValidateLabelValue(test.given))
+				require.NoError(t, manifest.ValidateLabelValue(name, test.given))
 			}
 		})
 	}

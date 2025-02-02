@@ -32,7 +32,7 @@ func TestStatelessManifestToModelCasting(t *testing.T) {
 		"unknown-kind": {
 			given: manifest.ResourceManifest{
 				TypeMeta: manifest.TypeMeta{
-					Kind: "new",
+					Kind: "mew",
 				},
 				Spec: &TestSpec{
 					Name: "test-spec",
@@ -40,14 +40,22 @@ func TestStatelessManifestToModelCasting(t *testing.T) {
 			},
 			expectError: true,
 		},
-		"nil-spec": {
+		"nil-spec-ok": {
 			given: manifest.ResourceManifest{
 				TypeMeta: manifest.TypeMeta{
 					Kind: testKind,
 				},
+				Metadata: manifest.ObjectMeta{
+					Name: "nil-spec-ok",
+				},
 				Spec: nil,
 			},
-			expectError: true,
+			expect: TestStatelessModel{
+				ObjectMeta: manifest.ObjectMeta{
+					Name: "nil-spec-ok",
+				},
+				Spec: TestSpec{},
+			},
 		},
 		"basic-spec": {
 			given: manifest.ResourceManifest{
@@ -71,6 +79,20 @@ func TestStatelessManifestToModelCasting(t *testing.T) {
 					Value: 3,
 				},
 			},
+		},
+		"kind-spec-mismatch": {
+			given: manifest.ResourceManifest{
+				TypeMeta: manifest.TypeMeta{
+					Kind: testKind,
+				},
+				Metadata: manifest.ObjectMeta{
+					Name: "test-basic",
+				},
+				Spec: &TestStatus{
+					Name: "test-spec",
+				},
+			},
+			expectError: true,
 		},
 	}
 
@@ -96,13 +118,13 @@ func TestStatefulManifestToModelCasting(t *testing.T) {
 
 	testCases := map[string]struct {
 		given       manifest.ResourceManifest
-		expect      TestStatelessModel
+		expect      TestStatefulModel
 		expectError bool
 	}{
 		"unknown-kind": {
 			given: manifest.ResourceManifest{
 				TypeMeta: manifest.TypeMeta{
-					Kind: "new",
+					Kind: "mew",
 				},
 				Spec: &TestSpec{
 					Name: "test-spec",
@@ -115,10 +137,17 @@ func TestStatefulManifestToModelCasting(t *testing.T) {
 				TypeMeta: manifest.TypeMeta{
 					Kind: testKind,
 				},
+				Metadata: manifest.ObjectMeta{
+					Name: "nil-spec",
+				},
 				Spec: nil,
 			},
-			expectError: true,
-		},
+			expect: TestStatefulModel{
+				ObjectMeta: manifest.ObjectMeta{
+					Name: "nil-spec",
+				},
+				Spec: TestSpec{},
+			}},
 		"nil-status": {
 			given: manifest.ResourceManifest{
 				TypeMeta: manifest.TypeMeta{
@@ -133,7 +162,7 @@ func TestStatefulManifestToModelCasting(t *testing.T) {
 				},
 				Status: nil,
 			},
-			expect: TestStatelessModel{
+			expect: TestStatefulModel{
 				ObjectMeta: manifest.ObjectMeta{
 					Name: "test-basic",
 				},
@@ -154,107 +183,32 @@ func TestStatefulManifestToModelCasting(t *testing.T) {
 				Spec: &TestSpec{
 					Name:  "test-spec",
 					Value: 3,
-				},
-			},
-			expect: TestStatelessModel{
-				ObjectMeta: manifest.ObjectMeta{
-					Name: "test-basic",
-				},
-				Spec: TestSpec{
-					Name:  "test-spec",
-					Value: 3,
-				},
-			},
-		},
-	}
-
-	for name, tc := range testCases {
-		test := tc
-		t.Run(name, func(t *testing.T) {
-			got, err := manifest.ManifestAsResource[TestSpec](test.given)
-
-			if test.expectError {
-				require.Error(t, err, "expected error: %v", test.expectError)
-			} else {
-				require.NoError(t, err, "expected error: %v", test.expectError)
-				require.Equal(t, test.expect, TestStatelessModel(got))
-			}
-		})
-	}
-}
-
-func TestManifestWithStatusOnlyToModelCasting(t *testing.T) {
-	testKind := manifest.Kind("StatefulManifest")
-	require.NoError(t, manifest.RegisterManifest(testKind, nil, &TestStatus{}))
-	defer manifest.UnregisterKind(testKind)
-
-	testCases := map[string]struct {
-		given       manifest.ResourceManifest
-		expect      TestStatefulModel
-		expectError bool
-	}{
-		"unknown-kind": {
-			given: manifest.ResourceManifest{
-				TypeMeta: manifest.TypeMeta{
-					Kind: "new",
-				},
-				Spec: &TestSpec{
-					Name: "test-spec",
-				},
-			},
-			expectError: true,
-		},
-		"nil-spec-n-status": {
-			given: manifest.ResourceManifest{
-				TypeMeta: manifest.TypeMeta{
-					Kind: testKind,
-				},
-				Metadata: manifest.ObjectMeta{
-					Name: "test-basic",
-				},
-				Spec:   nil,
-				Status: nil,
-			},
-			expectError: true,
-		},
-		"nil-status": {
-			given: manifest.ResourceManifest{
-				TypeMeta: manifest.TypeMeta{
-					Kind: testKind,
-				},
-				Metadata: manifest.ObjectMeta{
-					Name: "test-basic",
-				},
-				Spec: &TestSpec{
-					Name:  "test-spec",
-					Value: 3,
-				},
-				Status: nil,
-			},
-			expectError: true,
-		},
-		"basic-all": {
-			given: manifest.ResourceManifest{
-				TypeMeta: manifest.TypeMeta{
-					Kind: testKind,
-				},
-				Metadata: manifest.ObjectMeta{
-					Name: "test-basic",
-				},
-				Status: &TestStatus{
-					Name: "test-spec",
-					Data: []int{3, 8, 4},
 				},
 			},
 			expect: TestStatefulModel{
 				ObjectMeta: manifest.ObjectMeta{
 					Name: "test-basic",
 				},
-				Status: TestStatus{
-					Name: "test-spec",
-					Data: []int{3, 8, 4},
+				Spec: TestSpec{
+					Name:  "test-spec",
+					Value: 3,
 				},
 			},
+		},
+		"kind-spec-mismatch": {
+			given: manifest.ResourceManifest{
+				TypeMeta: manifest.TypeMeta{
+					Kind: testKind,
+				},
+				Metadata: manifest.ObjectMeta{
+					Name: "test-basic",
+				},
+				Spec: &TestStatus{
+					Name: "data",
+					Data: []int{3, 2, 1},
+				},
+			},
+			expectError: true,
 		},
 	}
 
@@ -266,9 +220,14 @@ func TestManifestWithStatusOnlyToModelCasting(t *testing.T) {
 			if test.expectError {
 				require.Error(t, err, "expected error: %v", test.expectError)
 			} else {
-				require.NoError(t, err, "expected error: %v", test.expectError)
+				require.NoError(t, err, "unexpected error")
 				require.Equal(t, test.expect, TestStatefulModel(got))
 			}
 		})
 	}
+}
+
+func TestManifestWithStatusOnlyToModelCasting(t *testing.T) {
+	testKind := manifest.Kind("StatefulestManifest")
+	require.Error(t, manifest.RegisterManifest(testKind, nil, &TestStatus{}))
 }
