@@ -12,7 +12,6 @@ import (
 type (
 	ResourceRequest struct {
 		ID string `uri:"id" form:"id" binding:"required"`
-		// 		ID manifest.ResourceID `uri:"id" form:"id" binding:"required"`
 	}
 
 	// VersionQuery is a set of query params for the versioned resource,
@@ -38,11 +37,11 @@ type (
 // [HTTPHeaderContentType] is used for content-type negotiation.
 // Note, the call is terminated if incorrect [manifest.kind] is passed to the API.
 // Refer to [RequireManifest] to get extract manifest form the call context.
-func ManifestAPI(kind manifest.Kind) gin.HandlerFunc {
+func ManifestAPI(expectedKind manifest.Kind) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		manifest := manifest.ResourceManifest{
 			TypeMeta: manifest.TypeMeta{
-				Kind: kind, // Assume correct kind in case of run-triggers with min info
+				Kind: expectedKind, // Assume correct kind in case of run-triggers with min info
 			},
 		}
 		if err := ctx.ShouldBindWith(&manifest, bindingFor(ctx.Request.Method, ctx.ContentType())); err != nil {
@@ -50,9 +49,9 @@ func ManifestAPI(kind manifest.Kind) gin.HandlerFunc {
 			return
 		}
 
-		if manifest.Kind == "" {
-			manifest.Kind = kind
-		} else if manifest.Kind != kind { // validate that API request is for correct manifest type:
+		if manifest.Kind == "" && expectedKind != "" {
+			manifest.Kind = expectedKind
+		} else if manifest.Kind != expectedKind { // validate that API request is for correct manifest type:
 			AbortWithError(ctx, http.StatusBadRequest, ErrWrongKind)
 			return
 		}
@@ -155,5 +154,5 @@ func MaybeResourceCreated(ctx *gin.Context, resource manifest.ResourceManifest, 
 	}
 
 	// Setup 'Location' header and write response
-	ReplyResourceCreated(ctx, resource.Metadata.UID, resource)
+	ReplyResourceCreated(ctx, resource.Metadata.Name, resource)
 }
