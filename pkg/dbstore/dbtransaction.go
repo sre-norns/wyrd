@@ -24,11 +24,11 @@ func (tx *gormStoreTransaction) Commit() error {
 }
 
 func (tx *gormStoreTransaction) Create(value any, options ...Option) error {
-	return applyOptions(tx.db, value, options...).Create(value).Error
+	return applyOptions(tx.db, tx.config, value, options...).Create(value).Error
 }
 
 func (tx *gormStoreTransaction) Update(newValue any, id manifest.VersionedResourceID, options ...Option) (exists bool, err error) {
-	rx := applyOptions(tx.db, newValue, options...).Where(fmt.Sprintf("%s = ?", tx.config.VersionColumnName), id.Version).Save(newValue)
+	rx := applyOptions(tx.db, tx.config, newValue, options...).Where(fmt.Sprintf("%s = ?", tx.config.VersionColumnName), id.Version).Save(newValue)
 	if errors.Is(rx.Error, gorm.ErrRecordNotFound) {
 		return false, nil
 	}
@@ -37,7 +37,7 @@ func (tx *gormStoreTransaction) Update(newValue any, id manifest.VersionedResour
 }
 
 func (tx *gormStoreTransaction) GetByUID(dest any, id manifest.ResourceID, options ...Option) (bool, error) {
-	rx := applyOptions(tx.db, dest, options...).First(dest, id)
+	rx := applyOptions(tx.db, tx.config, dest, options...).First(dest, id)
 	if errors.Is(rx.Error, gorm.ErrRecordNotFound) {
 		return false, nil
 	}
@@ -45,7 +45,7 @@ func (tx *gormStoreTransaction) GetByUID(dest any, id manifest.ResourceID, optio
 }
 
 func (tx *gormStoreTransaction) GetByName(dest any, name manifest.ResourceName, options ...Option) (bool, error) {
-	rx := applyOptions(tx.db, dest, options...).Where("name = ?", name).First(dest)
+	rx := applyOptions(tx.db, tx.config, dest, options...).Where("name = ?", name).First(dest)
 	if errors.Is(rx.Error, gorm.ErrRecordNotFound) {
 		return false, nil
 	}
@@ -53,7 +53,7 @@ func (tx *gormStoreTransaction) GetByName(dest any, name manifest.ResourceName, 
 }
 
 func (tx *gormStoreTransaction) Delete(value any, id manifest.ResourceID, version manifest.Version, options ...Option) (existed bool, err error) {
-	t := applyOptions(tx.db, value, options...)
+	t := applyOptions(tx.db, tx.config, value, options...)
 	if version > 0 {
 		t = t.Where(fmt.Sprintf("%s = ?", tx.config.VersionColumnName), version)
 	}
@@ -65,7 +65,7 @@ func (tx *gormStoreTransaction) Delete(value any, id manifest.ResourceID, versio
 }
 
 func (tx *gormStoreTransaction) Restore(model any, id manifest.ResourceID, options ...Option) (existed bool, err error) {
-	rx := applyOptions(tx.db.Model(model).Unscoped(), nil, options...).Where(fmt.Sprintf("%s = ?", tx.config.IDColumnName), id).Where(fmt.Sprintf("%s IS NOT NULL", tx.config.DeletedAtColumnName)).Update(tx.config.DeletedAtColumnName, nil)
+	rx := applyOptions(tx.db.Model(model).Unscoped(), tx.config, nil, options...).Where(fmt.Sprintf("%s = ?", tx.config.IDColumnName), id).Where(fmt.Sprintf("%s IS NOT NULL", tx.config.DeletedAtColumnName)).Update(tx.config.DeletedAtColumnName, nil)
 	if errors.Is(rx.Error, gorm.ErrRecordNotFound) {
 		return false, nil
 	}
@@ -73,11 +73,15 @@ func (tx *gormStoreTransaction) Restore(model any, id manifest.ResourceID, optio
 }
 
 func (tx *gormStoreTransaction) AddLinked(value any, link string, owner any, options ...Option) error {
-	return applyOptions(tx.db.Model(owner), value, options...).Association(link).Append(value)
+	return applyOptions(tx.db.Model(owner), tx.config, value, options...).Association(link).Append(value)
 }
 
 func (tx *gormStoreTransaction) RemoveLinked(value any, link string, owner any) error {
 	return tx.db.Model(owner).Association(link).Delete(value)
+}
+
+func (tx *gormStoreTransaction) ClearLinked(link string, owner any) error {
+	return tx.db.Model(owner).Association(link).Clear()
 }
 
 func RollbackOnPanic(tx *gormStoreTransaction) {

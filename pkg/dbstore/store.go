@@ -6,16 +6,20 @@ import (
 	"github.com/sre-norns/wyrd/pkg/manifest"
 )
 
+type expandDetails struct {
+	Asc   bool
+	Query manifest.SearchQuery
+}
 type transactionContext struct {
 	unScoped bool
 	Omit     map[string]struct{}
-	Expand   map[string]manifest.SearchQuery
+	Expand   map[string]expandDetails
 }
 
 func newTransactionContext() transactionContext {
 	return transactionContext{
 		Omit:   map[string]struct{}{},
-		Expand: map[string]manifest.SearchQuery{},
+		Expand: map[string]expandDetails{},
 	}
 }
 
@@ -32,7 +36,20 @@ func Omit(value string) Option {
 // Expand option instruct fetch operation to pull associated entries in one-to-many relation
 func Expand(value string, searchQuery manifest.SearchQuery) Option {
 	return func(a any, tc transactionContext) transactionContext {
-		tc.Expand[value] = searchQuery
+		tc.Expand[value] = expandDetails{
+			Query: searchQuery,
+		}
+
+		return tc
+	}
+}
+
+func ExpandAsc(value string, searchQuery manifest.SearchQuery) Option {
+	return func(a any, tc transactionContext) transactionContext {
+		tc.Expand[value] = expandDetails{
+			Asc:   true,
+			Query: searchQuery,
+		}
 		return tc
 	}
 }
@@ -53,13 +70,17 @@ type Store interface {
 	Create(ctx context.Context, value any, options ...Option) error
 	GetByUID(ctx context.Context, value any, id manifest.ResourceID, options ...Option) (exists bool, err error)
 	GetByName(ctx context.Context, value any, id manifest.ResourceName, options ...Option) (exists bool, err error)
-	GetWithVersion(ctx context.Context, dest any, id manifest.VersionedResourceID, options ...Option) (bool, error)
+
+	GetByUIDWithVersion(ctx context.Context, dest any, id manifest.VersionedResourceID, options ...Option) (bool, error)
+	GetByNameWithVersion(ctx context.Context, dest any, id manifest.ResourceName, version manifest.Version, options ...Option) (bool, error)
+
 	Update(ctx context.Context, newValue any, id manifest.VersionedResourceID, options ...Option) (exists bool, err error)
 	Delete(ctx context.Context, model any, id manifest.ResourceID, version manifest.Version, options ...Option) (existed bool, err error)
 	Restore(ctx context.Context, model any, id manifest.ResourceID, options ...Option) (existed bool, err error)
 
 	AddLinked(ctx context.Context, value any, link string, owner any, options ...Option) error
 	RemoveLinked(ctx context.Context, value any, link string, owner any) error
+	ClearLinked(ctx context.Context, link string, owner any) error
 
 	Find(ctx context.Context, dest any, searchQuery manifest.SearchQuery, options ...Option) (total int64, err error)
 	FindLinked(ctx context.Context, dest any, link string, owner any, searchQuery manifest.SearchQuery, options ...Option) (totalCount int64, err error)
@@ -69,7 +90,7 @@ type Store interface {
 	FindLabelValues(ctx context.Context, model any, key string, searchQuery manifest.SearchQuery, options ...Option) (manifest.StringSet, error)
 }
 
-type Transitional interface {
+type Transactional interface {
 	Begin(context.Context) (StoreTransaction, error)
 }
 
@@ -85,9 +106,13 @@ type StoreTransaction interface {
 
 	AddLinked(value any, link string, owner any, options ...Option) error
 	RemoveLinked(model any, link string, owner any) error
+	ClearLinked(link string, owner any) error
 }
 
-type TransitionalStore interface {
-	Transitional
+type TransactionalStore interface {
+	Transactional
 	Store
 }
+
+// Type alias to support migration
+type TransitionalStore = TransactionalStore

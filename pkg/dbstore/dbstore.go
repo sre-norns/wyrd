@@ -23,6 +23,7 @@ type Config struct {
 	VersionColumnName   string
 	LabelsColumnName    string
 	CreatedAtColumnName string
+	UpdatedAtColumnName string
 	DeletedAtColumnName string
 }
 
@@ -37,7 +38,7 @@ type DBStore struct {
 	config Config
 }
 
-func NewDBStore(db *gorm.DB, cfg Config) (TransitionalStore, error) {
+func NewDBStore(db *gorm.DB, cfg Config) (TransactionalStore, error) {
 	if db == nil {
 		return nil, ErrNoDBObject
 	}
@@ -54,6 +55,9 @@ func NewDBStore(db *gorm.DB, cfg Config) (TransitionalStore, error) {
 	if cfg.CreatedAtColumnName == "" {
 		cfg.CreatedAtColumnName = "created_at"
 	}
+	if cfg.UpdatedAtColumnName == "" {
+		cfg.UpdatedAtColumnName = "updated_at"
+	}
 	if cfg.DeletedAtColumnName == "" {
 		cfg.DeletedAtColumnName = "deleted_at"
 	}
@@ -64,7 +68,7 @@ func NewDBStore(db *gorm.DB, cfg Config) (TransitionalStore, error) {
 	}, nil
 }
 
-func applyOptions(tx *gorm.DB, value any, options ...Option) *gorm.DB {
+func applyOptions(tx *gorm.DB, config Config, value any, options ...Option) *gorm.DB {
 	tContext := newTransactionContext()
 	for _, o := range options {
 		tContext = o(value, tContext)
@@ -78,8 +82,17 @@ func applyOptions(tx *gorm.DB, value any, options ...Option) *gorm.DB {
 		tx = tx.Omit(omit)
 	}
 
-	for expand := range tContext.Expand {
-		tx = tx.Preload(expand)
+	for expand, details := range tContext.Expand {
+		tx = tx.Preload(
+			expand,
+			func(db *gorm.DB) *gorm.DB {
+				stx, _, _ := withQuery(db, config.LabelsColumnName, config.CreatedAtColumnName, details.Query)
+				return stx.Order(clause.OrderByColumn{
+					Column: clause.Column{Name: config.UpdatedAtColumnName},
+					Desc:   !details.Asc,
+				})
+			},
+		)
 	}
 
 	return tx
@@ -105,14 +118,13 @@ func matchName(tx *gorm.DB, jfield string, query manifest.SearchQuery) *gorm.DB 
 }
 
 func limitTimeRange(tx *gorm.DB, column string, from time.Time, till time.Time) *gorm.DB {
-	nilTime := time.Time{}
-	if from != nilTime {
-		if till != nilTime {
+	if !from.IsZero() {
+		if !till.IsZero() {
 			tx = tx.Where(fmt.Sprintf("%s BETWEEN ? AND ?", column), from, till)
 		} else {
 			tx = tx.Where(fmt.Sprintf("%s  >= ?", column), from)
 		}
-	} else if till != nilTime {
+	} else if !till.IsZero() {
 		tx = tx.Where(fmt.Sprintf("%s < ?", column), till)
 	}
 
@@ -149,11 +161,17 @@ func (s *DBStore) Create(ctx context.Context, value any, options ...Option) erro
 }
 
 func (s *DBStore) FindLinked(ctx context.Context, dest any, link string, owner any, searchQuery manifest.SearchQuery, options ...Option) (totalCount int64, err error) {
-	tx := applyOptions(s.db.Model(owner).WithContext(ctx), dest, options...)
+	tx := applyOptions(s.db.Model(owner).WithContext(ctx), s.config, dest, options...)
 	tx, xtx, err := withQuery(tx, s.config.LabelsColumnName, s.config.CreatedAtColumnName, searchQuery)
 	if err != nil {
 		return
 	}
+
+	tx = tx.Order(
+		clause.OrderByColumn{
+			Column: clause.Column{Name: s.config.CreatedAtColumnName},
+			Desc:   false,
+		})
 
 	// Note, don't simply the following as order matters here
 	err = tx.Association(link).Find(dest)
@@ -174,6 +192,10 @@ func (s *DBStore) RemoveLinked(ctx context.Context, value any, link string, owne
 	return s.singleTransaction(ctx).RemoveLinked(value, link, owner)
 }
 
+func (s *DBStore) ClearLinked(ctx context.Context, link string, owner any) error {
+	return s.singleTransaction(ctx).ClearLinked(link, owner)
+}
+
 func (s *DBStore) GetByUID(ctx context.Context, dest any, id manifest.ResourceID, options ...Option) (bool, error) {
 	return s.singleTransaction(ctx).GetByUID(dest, id, options...)
 }
@@ -182,9 +204,18 @@ func (s *DBStore) GetByName(ctx context.Context, dest any, id manifest.ResourceN
 	return s.singleTransaction(ctx).GetByName(dest, id, options...)
 }
 
-func (s *DBStore) GetWithVersion(ctx context.Context, dest any, id manifest.VersionedResourceID, options ...Option) (bool, error) {
-	tx := applyOptions(s.db.WithContext(ctx), dest, options...)
+func (s *DBStore) GetByUIDWithVersion(ctx context.Context, dest any, id manifest.VersionedResourceID, options ...Option) (bool, error) {
+	tx := applyOptions(s.db.WithContext(ctx), s.config, dest, options...)
 	tx = tx.Where(fmt.Sprintf("%s = ?", s.config.VersionColumnName), id.Version).First(dest, id.ID)
+	if errors.Is(tx.Error, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+	return tx.RowsAffected == 1, tx.Error
+}
+
+func (s *DBStore) GetByNameWithVersion(ctx context.Context, dest any, name manifest.ResourceName, version manifest.Version, options ...Option) (bool, error) {
+	tx := applyOptions(s.db.WithContext(ctx), s.config, dest, options...)
+	tx = tx.Where(fmt.Sprintf("%s = ?", s.config.VersionColumnName), version).Where("name = ?", name).First(dest)
 	if errors.Is(tx.Error, gorm.ErrRecordNotFound) {
 		return false, nil
 	}
@@ -204,7 +235,7 @@ func (s *DBStore) Restore(ctx context.Context, model any, id manifest.ResourceID
 }
 
 func (s *DBStore) Find(ctx context.Context, resources any, searchQuery manifest.SearchQuery, options ...Option) (total int64, err error) {
-	tx := applyOptions(s.db.WithContext(ctx), resources, options...)
+	tx := applyOptions(s.db.WithContext(ctx), s.config, resources, options...)
 	tx, xtx, err := withQuery(tx, s.config.LabelsColumnName, s.config.CreatedAtColumnName, searchQuery)
 	if err != nil {
 		return 0, err
@@ -341,9 +372,17 @@ func withSelector(tx *gorm.DB, jcolumn string, selector manifest.Selector) (*gor
 
 			qs = append(qs, JSONQuery(jcolumn).LessThan(rsValue, req.Key()))
 		case manifest.In:
-			qs = append(qs, JSONQuery(jcolumn).KeyIn(req.Key(), req.Values()))
+			values := req.Values()
+			if values == nil {
+				return nil, fmt.Errorf("%w: nil values for key `%v`", manifest.ErrNonSelectableRequirements, req.Key())
+			}
+			qs = append(qs, JSONQuery(jcolumn).KeyIn(req.Key(), values))
 		case manifest.NotIn:
-			qs = append(qs, JSONQuery(jcolumn).KeyNotIn(req.Key(), req.Values()))
+			values := req.Values()
+			if values == nil {
+				return nil, fmt.Errorf("%w: nil values for key `%v`", manifest.ErrNonSelectableRequirements, req.Key())
+			}
+			qs = append(qs, JSONQuery(jcolumn).KeyNotIn(req.Key(), values))
 		case manifest.Exists:
 			qs = append(qs, JSONQuery(jcolumn).HasKey(req.Key()))
 		case manifest.DoesNotExist:

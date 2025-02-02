@@ -249,10 +249,24 @@ func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
 
 				builder.WriteString(string(jsonQuery.op))
 
-				if _, ok := jsonQuery.equalsValue.(string); ok {
-					stmt.AddVar(builder, jsonQuery.equalsValue)
+				if jsonQuery.groupOp {
+					idx := 0
+					builder.WriteString("(")
+					for v := range jsonQuery.groupValueSet {
+						if idx > 0 {
+							builder.WriteByte(',')
+						}
+						stmt.AddVar(builder, v)
+						idx += 1
+					}
+					builder.WriteString(")")
 				} else {
-					stmt.AddVar(builder, fmt.Sprint(jsonQuery.equalsValue))
+					if _, ok := jsonQuery.equalsValue.(string); ok {
+						stmt.AddVar(builder, jsonQuery.equalsValue)
+					} else {
+						stmt.AddVar(builder, fmt.Sprint(jsonQuery.equalsValue))
+					}
+
 				}
 			}
 		}
