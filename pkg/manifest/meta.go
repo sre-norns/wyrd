@@ -187,7 +187,7 @@ type ObjectMeta struct {
 	// This time is recorded to implement 'tombstones' - objects content may be deleted, while the record of its deletion is retained.
 	// It is populated by the system and clients may not set this value.
 	// Read-only.
-	DeletedAt *gorm.DeletedAt `form:"deletionTimestamp,omitempty" json:"deletionTimestamp,omitempty" yaml:"deletionTimestamp,omitempty" xml:"deletionTimestamp,omitempty" gorm:"index:,composite:deleted_name_name,option:NULLS NOT DISTINCT"`
+	DeletedAt *gorm.DeletedAt `form:"deletionTimestamp,omitempty" json:"deletionTimestamp,omitempty" yaml:"deletionTimestamp,omitempty" xml:"deletionTimestamp,omitempty" gorm:"index:,composite:deleted_name,option:NULLS NOT DISTINCT"`
 }
 
 func (m *ObjectMeta) BeforeCreate(tx *gorm.DB) (err error) {
