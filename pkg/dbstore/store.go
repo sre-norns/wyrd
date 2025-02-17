@@ -11,9 +11,10 @@ type expandDetails struct {
 	Query manifest.SearchQuery
 }
 type transactionContext struct {
-	unScoped bool
-	Omit     map[string]struct{}
-	Expand   map[string]expandDetails
+	unScoped        bool
+	disableCounting bool
+	Omit            manifest.StringSet
+	Expand          map[string]expandDetails
 }
 
 func newTransactionContext() transactionContext {
@@ -26,9 +27,19 @@ func newTransactionContext() transactionContext {
 type Option func(any, transactionContext) transactionContext
 
 // Omit option allows to specify what fields should be omitted when writing or reading an entry
-func Omit(value string) Option {
+func Count(value bool) Option {
 	return func(a any, tc transactionContext) transactionContext {
-		tc.Omit[value] = struct{}{}
+		tc.disableCounting = !value
+		return tc
+	}
+}
+
+// Omit option allows to specify what fields should be omitted when writing or reading an entry
+func Omit(value ...string) Option {
+	return func(a any, tc transactionContext) transactionContext {
+		for _, v := range value {
+			tc.Omit[v] = struct{}{}
+		}
 		return tc
 	}
 }
@@ -67,13 +78,14 @@ type Store interface {
 	// Ping performs basic connectivity check to the store.
 	Ping(context.Context) error
 
-	Create(ctx context.Context, value any, options ...Option) error
 	GetByUID(ctx context.Context, value any, id manifest.ResourceID, options ...Option) (exists bool, err error)
 	GetByName(ctx context.Context, value any, id manifest.ResourceName, options ...Option) (exists bool, err error)
 
 	GetByUIDWithVersion(ctx context.Context, dest any, id manifest.VersionedResourceID, options ...Option) (bool, error)
 	GetByNameWithVersion(ctx context.Context, dest any, id manifest.ResourceName, version manifest.Version, options ...Option) (bool, error)
 
+	Create(ctx context.Context, value any, options ...Option) error
+	CreateOrUpdate(ctx context.Context, newValue any, options ...Option) (exists bool, err error)
 	Update(ctx context.Context, newValue any, id manifest.VersionedResourceID, options ...Option) (exists bool, err error)
 	Delete(ctx context.Context, model any, id manifest.ResourceID, version manifest.Version, options ...Option) (existed bool, err error)
 	Restore(ctx context.Context, model any, id manifest.ResourceID, options ...Option) (existed bool, err error)

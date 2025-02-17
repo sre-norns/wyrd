@@ -68,25 +68,30 @@ func NewDBStore(db *gorm.DB, cfg Config) (TransactionalStore, error) {
 	}, nil
 }
 
-func applyOptions(tx *gorm.DB, config Config, value any, options ...Option) *gorm.DB {
+func applyOptions(db *gorm.DB, config Config, value any, options ...Option) (tx, ctx *gorm.DB) {
 	tContext := newTransactionContext()
 	for _, o := range options {
 		tContext = o(value, tContext)
 	}
 
+	tx, ctx = db, db
 	if tContext.unScoped {
 		tx = tx.Unscoped()
 	}
 
-	for omit := range tContext.Omit {
-		tx = tx.Omit(omit)
+	if tContext.disableCounting {
+		ctx = nil
+	}
+
+	if len(tContext.Omit) > 0 {
+		tx = tx.Omit(tContext.Omit.Slice()...)
 	}
 
 	for expand, details := range tContext.Expand {
 		tx = tx.Preload(
 			expand,
 			func(db *gorm.DB) *gorm.DB {
-				stx, _, _ := withQuery(db, config.LabelsColumnName, config.CreatedAtColumnName, details.Query)
+				stx, _, _ := withQuery(db, nil, config.LabelsColumnName, config.CreatedAtColumnName, details.Query)
 				return stx.Order(clause.OrderByColumn{
 					Column: clause.Column{Name: config.UpdatedAtColumnName},
 					Desc:   !details.Asc,
@@ -95,21 +100,29 @@ func applyOptions(tx *gorm.DB, config Config, value any, options ...Option) *gor
 		)
 	}
 
+	return
+}
+
+func limitedQuery(tx *gorm.DB, query manifest.SearchQuery) *gorm.DB {
+	if tx == nil {
+		return tx
+	}
+
+	if query.Offset > 0 {
+		tx = tx.Offset(int(query.Offset))
+	}
+	if query.Limit > 0 {
+		tx = tx.Limit(int(query.Limit))
+	}
+
 	return tx
 }
 
-func limitedQuery(inTx *gorm.DB, query manifest.SearchQuery) *gorm.DB {
-	if query.Offset > 0 {
-		inTx = inTx.Offset(int(query.Offset))
-	}
-	if query.Limit > 0 {
-		inTx = inTx.Limit(int(query.Limit))
-	}
-
-	return inTx
-}
-
 func matchName(tx *gorm.DB, jfield string, query manifest.SearchQuery) *gorm.DB {
+	if tx == nil {
+		return tx
+	}
+
 	if query.Name != "" {
 		return tx.Where(jfield+" LIKE ?", fmt.Sprintf("%%%s%%", query.Name))
 	}
@@ -118,6 +131,10 @@ func matchName(tx *gorm.DB, jfield string, query manifest.SearchQuery) *gorm.DB 
 }
 
 func limitTimeRange(tx *gorm.DB, column string, from time.Time, till time.Time) *gorm.DB {
+	if tx == nil {
+		return tx
+	}
+
 	if !from.IsZero() {
 		if !till.IsZero() {
 			tx = tx.Where(fmt.Sprintf("%s BETWEEN ? AND ?", column), from, till)
@@ -156,13 +173,17 @@ func (s *DBStore) Begin(ctx context.Context) (StoreTransaction, error) {
 	}, tx.Error
 }
 
+func (s *DBStore) CreateOrUpdate(ctx context.Context, value any, options ...Option) (exists bool, err error) {
+	return s.singleTransaction(ctx).CreateOrUpdate(value, options...)
+}
+
 func (s *DBStore) Create(ctx context.Context, value any, options ...Option) error {
 	return s.singleTransaction(ctx).Create(value, options...)
 }
 
 func (s *DBStore) FindLinked(ctx context.Context, dest any, link string, owner any, searchQuery manifest.SearchQuery, options ...Option) (totalCount int64, err error) {
-	tx := applyOptions(s.db.Model(owner).WithContext(ctx), s.config, dest, options...)
-	tx, xtx, err := withQuery(tx, s.config.LabelsColumnName, s.config.CreatedAtColumnName, searchQuery)
+	tx, xtx := applyOptions(s.db.Model(owner).WithContext(ctx), s.config, dest, options...)
+	tx, xtx, err = withQuery(tx, xtx, s.config.LabelsColumnName, s.config.CreatedAtColumnName, searchQuery)
 	if err != nil {
 		return
 	}
@@ -205,7 +226,7 @@ func (s *DBStore) GetByName(ctx context.Context, dest any, id manifest.ResourceN
 }
 
 func (s *DBStore) GetByUIDWithVersion(ctx context.Context, dest any, id manifest.VersionedResourceID, options ...Option) (bool, error) {
-	tx := applyOptions(s.db.WithContext(ctx), s.config, dest, options...)
+	tx, _ := applyOptions(s.db.WithContext(ctx), s.config, dest, options...)
 	tx = tx.Where(fmt.Sprintf("%s = ?", s.config.VersionColumnName), id.Version).First(dest, id.ID)
 	if errors.Is(tx.Error, gorm.ErrRecordNotFound) {
 		return false, nil
@@ -214,7 +235,7 @@ func (s *DBStore) GetByUIDWithVersion(ctx context.Context, dest any, id manifest
 }
 
 func (s *DBStore) GetByNameWithVersion(ctx context.Context, dest any, name manifest.ResourceName, version manifest.Version, options ...Option) (bool, error) {
-	tx := applyOptions(s.db.WithContext(ctx), s.config, dest, options...)
+	tx, _ := applyOptions(s.db.WithContext(ctx), s.config, dest, options...)
 	tx = tx.Where(fmt.Sprintf("%s = ?", s.config.VersionColumnName), version).Where("name = ?", name).First(dest)
 	if errors.Is(tx.Error, gorm.ErrRecordNotFound) {
 		return false, nil
@@ -235,8 +256,8 @@ func (s *DBStore) Restore(ctx context.Context, model any, id manifest.ResourceID
 }
 
 func (s *DBStore) Find(ctx context.Context, resources any, searchQuery manifest.SearchQuery, options ...Option) (total int64, err error) {
-	tx := applyOptions(s.db.WithContext(ctx), s.config, resources, options...)
-	tx, xtx, err := withQuery(tx, s.config.LabelsColumnName, s.config.CreatedAtColumnName, searchQuery)
+	tx, xtx := applyOptions(s.db.WithContext(ctx), s.config, resources, options...)
+	tx, xtx, err = withQuery(tx, xtx, s.config.LabelsColumnName, s.config.CreatedAtColumnName, searchQuery)
 	if err != nil {
 		return 0, err
 	}
@@ -399,15 +420,18 @@ func withSelector(tx *gorm.DB, jcolumn string, selector manifest.Selector) (*gor
 	return tx, nil
 }
 
-func withQuery(tx *gorm.DB, jcolumn, timeColumn string, query manifest.SearchQuery) (selecting *gorm.DB, counting *gorm.DB, err error) {
+func withQuery(tx, ctx *gorm.DB, jcolumn, timeColumn string, query manifest.SearchQuery) (selecting, counting *gorm.DB, err error) {
 	// Apply name matcher if any
 	tx = matchName(tx, "name", query)
+	ctx = matchName(ctx, "name", query)
 
 	// Apply time-range limit
 	tx = limitTimeRange(tx, timeColumn, query.FromTime, query.TillTime)
+	ctx = limitTimeRange(ctx, timeColumn, query.FromTime, query.TillTime)
 
 	tx, err = withSelector(tx, jcolumn, query.Selector)
+	ctx, _ = withSelector(ctx, jcolumn, query.Selector)
 
 	// Apply offset and limit to the query
-	return limitedQuery(tx, query), tx, err
+	return limitedQuery(tx, query), ctx, err
 }
