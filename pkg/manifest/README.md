@@ -1,5 +1,5 @@
-# SRE-Norns: Wyrd/Manifest
-A collection of components to help define flexible resource manifests.
+# Wyrd/Manifest
+A collection of components to help define CRD-like resource manifest.
 
 It is _inspired_ by Kubernetes Custom Resource Definitions (CRD) and follow the spec closely.
 This package enables service developer to support CRD format for the resources managed by their services.
