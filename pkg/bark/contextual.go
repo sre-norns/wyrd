@@ -91,16 +91,16 @@ func (c *contextualResponse[T]) Deleted(existed bool, err error) {
 }
 
 func (c *contextualResponse[T]) listPage(results []T, total int64) {
-	var selfUrl *url.URL
+	var selfURL *url.URL
 	if c.ctx.Request.URL != nil {
-		selfUrl = c.ctx.Request.URL
-		c.options = append(c.options, WithLink("self", manifest.HLink{Reference: selfUrl.String()}))
+		selfURL = c.ctx.Request.URL
+		c.options = append(c.options, WithLink("self", manifest.HLink{Reference: selfURL.String()}))
 	}
 
 	searchParams := RequireSearchQueryParams(c.ctx)
 	// If not the first page: give link to previous
-	if selfUrl != nil && searchParams.Page > 0 {
-		relURL := *selfUrl
+	if selfURL != nil && searchParams.Page > 0 {
+		relURL := *selfURL
 
 		query := relURL.Query()
 		query.Set("page", fmt.Sprint(searchParams.Page-1))
@@ -110,8 +110,8 @@ func (c *contextualResponse[T]) listPage(results []T, total int64) {
 	}
 
 	// If not the last page:
-	if selfUrl != nil && len(results) > 0 && uint(len(results)) == searchParams.PageSize {
-		relURL := *selfUrl
+	if selfURL != nil && len(results) > 0 && uint(len(results)) == searchParams.PageSize {
+		relURL := *selfURL
 
 		query := relURL.Query()
 		query.Set("page", fmt.Sprint(searchParams.Page+1))

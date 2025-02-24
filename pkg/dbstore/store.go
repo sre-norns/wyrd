@@ -26,7 +26,8 @@ func newTransactionContext() transactionContext {
 
 type Option func(any, transactionContext) transactionContext
 
-// Omit option allows to specify what fields should be omitted when writing or reading an entry
+// Count option allows toggle if Find... calls should count number of potential matches.
+// Disabling counting can lead to some performance improvements on large datasets and complex queries.
 func Count(value bool) Option {
 	return func(a any, tc transactionContext) transactionContext {
 		tc.disableCounting = !value
@@ -126,5 +127,5 @@ type TransactionalStore interface {
 	Store
 }
 
-// Type alias to support migration
+// TransitionalStore is a T type alias to support migration
 type TransitionalStore = TransactionalStore

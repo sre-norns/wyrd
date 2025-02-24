@@ -109,7 +109,7 @@ func TestLabelSelector_AsLabels(t *testing.T) {
 	}
 }
 
-func TesLabelSelector_Parsing(t *testing.T) {
+func TesLabelSelectorParsing(t *testing.T) {
 	testCases := map[string]struct {
 		expect      manifest.LabelSelector
 		given       string
