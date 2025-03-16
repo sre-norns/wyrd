@@ -19,3 +19,11 @@ type SearchQuery struct {
 	// Limit is the maximum number of results that a client can accept in return of the query.
 	Limit uint `uri:"limit" form:"limit" json:"limit,omitempty" yaml:"limit,omitempty" xml:"limit"`
 }
+
+// Empty returns true is the Selector has Zero value, and thus impose no filter.
+func (s SearchQuery) Empty() bool {
+	return s.Limit == 0 && s.Offset == 0 &&
+		s.FromTime.IsZero() && s.TillTime.IsZero() &&
+		s.Name == "" &&
+		(s.Selector == nil || s.Selector.Empty())
+}

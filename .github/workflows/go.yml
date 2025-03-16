@@ -18,8 +18,5 @@ jobs:
       with:
         go-version-file: 'go.mod'
 
-    - name: Audit
+    - name: Audit and Test
       run: make audit
-
-    - name: Test
-      run: make test

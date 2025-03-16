@@ -14,10 +14,12 @@ import (
 
 var (
 	ErrNoDSNorURL         = errors.New("no Data Source connection details provided")
+	ErrInvalidDBUrl       = errors.New("invalid DB URL")
 	ErrUnsupportedDialect = errors.New("unsupported data source type")
 )
 
-type StoreConfig struct {
+// Config struct defines common command line options to select and connect to the DB implementing store.
+type Config struct {
 	DSN string `help:"Data Source Name" group:"DB_STORE_DNS"`
 
 	URL      string `help:"Connection string" default:"sqlite:test.sqlite" group:"DB_STORE_URL" env:"DB_URL"`
@@ -28,14 +30,16 @@ type StoreConfig struct {
 	Port   *int   `help:"A port to connect to a Data Source" group:"DB_STORE_URL"`
 }
 
-func (c StoreConfig) Dialector() (gorm.Dialector, error) {
+// Dialector produces [gorm.Dialector] based on the config options selected.
+// This allows for flexible implementation where DB driver is selected based on the DB Url and connection parameters.
+func (c Config) Dialector() (gorm.Dialector, error) {
 	if c.DSN == "" && c.URL == "" {
 		return nil, ErrNoDSNorURL
 	}
 
 	u, err := dburl.Parse(c.URL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrInvalidDBUrl, err)
 	}
 
 	// convert custom params to DSN:
@@ -58,7 +62,7 @@ func (c StoreConfig) Dialector() (gorm.Dialector, error) {
 
 	dsn := strings.Join(extraParams, " ")
 	switch u.Driver {
-	case "sqlite3":
+	case "sqlite3", "sqlite":
 		return sqlite.Open(u.DSN), nil
 	case "mysql":
 		return mysql.Open(u.DSN), nil

@@ -15,6 +15,8 @@ var (
 	ErrKeyNameTooLong = fmt.Errorf("key %w", ErrNameTooLong)
 
 	ErrLabelValueTooLong = errors.New("label value is too long")
+
+	labelRegexp = regexp.MustCompile(`^[[:alnum:]]$|^[a-zA-Z0-9][a-zA-Z0-9_\.\-]*[a-zA-Z0-9]$`)
 )
 
 // Labels represent a set of key-value pairs associated with a resource.
@@ -45,8 +47,6 @@ func (l Labels) Slice() sort.StringSlice {
 
 	return labels
 }
-
-var labelRegexp = regexp.MustCompile(`^[[:alnum:]]$|^[a-zA-Z0-9][a-zA-Z0-9_\.\-]*[a-zA-Z0-9]$`)
 
 func ValidateLabelKeyName(value string) error {
 	if value == "" {

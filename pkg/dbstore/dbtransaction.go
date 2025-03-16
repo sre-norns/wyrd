@@ -11,7 +11,7 @@ import (
 type gormStoreTransaction struct {
 	db *gorm.DB
 
-	config Config
+	config SchemaConfig
 }
 
 func (tx *gormStoreTransaction) Rollback() {
@@ -28,9 +28,9 @@ func (tx *gormStoreTransaction) Create(value any, options ...Option) error {
 	return rtx.Create(value).Error
 }
 
-func (tx *gormStoreTransaction) Update(newValue any, id manifest.VersionedResourceID, options ...Option) (exists bool, err error) {
+func (tx *gormStoreTransaction) Update(newValue any, id manifest.ResourceID, options ...Option) (exists bool, err error) {
 	rtx, _ := applyOptions(tx.db.Model(newValue), tx.config, newValue, options...)
-	rtx = rtx.Where(fmt.Sprintf("%s = ?", tx.config.VersionColumnName), id.Version).Updates(newValue)
+	rtx = rtx.Updates(newValue)
 	if errors.Is(rtx.Error, gorm.ErrRecordNotFound) {
 		return false, nil
 	}
@@ -100,6 +100,9 @@ func (tx *gormStoreTransaction) ClearLinked(link string, owner any) error {
 	return tx.db.Model(owner).Association(link).Clear()
 }
 
+// RollbackOnPanic function sets a recovery point for a DB transaction.
+// In case a panic is caught and recovered when a DB transaction is opened, it will be rollback'd.
+// This function is designed to be called as `defer`'d after a new transaction is opened.
 func RollbackOnPanic(tx *gormStoreTransaction) {
 	if r := recover(); r != nil {
 		tx.Rollback()

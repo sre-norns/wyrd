@@ -386,15 +386,17 @@ func TestValidateSubdmainName(t *testing.T) {
 		"no-capitals-start": {given: "Name", expectError: true},
 		"no-capitals-mid":   {given: "why-Not", expectError: true},
 		"no-capitals-end":   {given: "why.name.X", expectError: true},
+		"name-too-long":     {given: "very.long.subdomain.name.very.long.subdomain.name.very.long.subdomain.name.that.is.longer.than.it.should.be.because.it.repeats.long.subdomain.name.that.is.longer.than.it.should.very.long.subdomain.name.that.is.longer.than.it.should.be.because.it.repeats.long.subdomain.name.that.is.longer.than.it.should", expectError: true},
 	}
 
 	for name, tc := range testCases {
 		test := tc
 		t.Run(name, func(t *testing.T) {
+			got := manifest.ValidateSubdomainName(test.given)
 			if test.expectError {
-				require.Error(t, manifest.ValidateSubdomainName(test.given))
+				require.Error(t, got)
 			} else {
-				require.NoError(t, manifest.ValidateSubdomainName(test.given))
+				require.NoError(t, got)
 			}
 		})
 	}

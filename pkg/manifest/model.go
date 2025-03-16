@@ -36,7 +36,6 @@ func (r VersionedResourceID) String() string {
 }
 
 type Model interface {
-	GetKind() Kind
 	GetTypeMetadata() TypeMeta
 	GetMetadata() ObjectMeta
 	GetSpec() any

@@ -2,6 +2,7 @@ package manifest_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/sre-norns/wyrd/pkg/manifest"
 	"github.com/stretchr/testify/require"
@@ -310,6 +311,68 @@ func Test_SelectorCanParseToString(t *testing.T) {
 			} else {
 				require.NoError(t, err, "expected error: %v", test.expectError)
 			}
+		})
+	}
+}
+
+func TestSearchQuery_IsEmpty(t *testing.T) {
+	testCases := map[string]struct {
+		given  manifest.SearchQuery
+		expect bool
+	}{
+		"empty-query-isempty": {
+			given:  manifest.SearchQuery{},
+			expect: true,
+		},
+		"empty-query-selector-isempty": {
+			given: manifest.SearchQuery{
+				Selector: manifest.NewSelector(),
+			},
+			expect: true,
+		},
+
+		"limited-query-is-not-empty": {
+			given: manifest.SearchQuery{
+				Limit: 150,
+			},
+		},
+		"paginated-query-is-not-empty": {
+			given: manifest.SearchQuery{
+				Offset: 150,
+				Limit:  50,
+			},
+		},
+
+		"time-query-is-not-empty": {
+			given: manifest.SearchQuery{
+				FromTime: time.Date(2005, time.June, 3, 0, 0, 0, 0, time.Local),
+			},
+		},
+		"timerange-query-is-not-empty": {
+			given: manifest.SearchQuery{
+				FromTime: time.Date(2005, time.June, 3, 0, 0, 0, 0, time.Local),
+				TillTime: time.Date(2015, time.February, 3, 0, 0, 0, 0, time.Local),
+			},
+		},
+		"name-query-is-not-empty": {
+			given: manifest.SearchQuery{
+				Name: "needle",
+			},
+		},
+
+		"query-with-selector-not-empty": {
+			given: manifest.SearchQuery{
+				Selector: manifest.NewSelector(
+					mockRequirement(t, "test-key", manifest.Exists),
+				),
+			},
+		},
+	}
+
+	for name, tc := range testCases {
+		test := tc
+		t.Run(name, func(t *testing.T) {
+			require.Equal(t, test.expect, test.given.Empty())
 		})
 	}
 }

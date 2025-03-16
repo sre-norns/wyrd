@@ -24,14 +24,14 @@ const (
 	isNotIn = sqlOp(" NOT IN ")
 )
 
-// JSONQueryExpression json query expression, implements clause.Expression interface to use as querier
-type JSONQueryExpression struct {
+// jsonQueryExpression json query expression, implements clause.Expression interface to use as querier
+type jsonQueryExpression struct {
 	asType  string
 	column  string
 	keys    []string
 	hasKeys bool
-	extract bool
-	path    string
+	// extract bool
+	path string
 
 	keysOp      sqlOp
 	op          sqlOp
@@ -41,59 +41,52 @@ type JSONQueryExpression struct {
 	groupValueSet manifest.StringSet
 }
 
-// JSONQuery query column as json
-func JSONQuery(column string) *JSONQueryExpression {
-	return &JSONQueryExpression{column: column}
-}
-
-// Extract extract json with path
-func (jsonQuery *JSONQueryExpression) Extract(path string) *JSONQueryExpression {
-	jsonQuery.extract = true
-	jsonQuery.path = path
-	return jsonQuery
+// jsonQuery query column as json
+func jsonQuery(column string) *jsonQueryExpression {
+	return &jsonQueryExpression{column: column}
 }
 
 // HasKey returns clause.Expression
-func (jsonQuery *JSONQueryExpression) HasKey(keys ...string) *JSONQueryExpression {
+func (jsonQuery *jsonQueryExpression) HasKey(keys ...string) *jsonQueryExpression {
 	jsonQuery.keys = keys
 	jsonQuery.hasKeys = true
 	jsonQuery.keysOp = notNull
 	return jsonQuery
 }
 
-func (jsonQuery *JSONQueryExpression) HasNoKey(keys ...string) *JSONQueryExpression {
+func (jsonQuery *jsonQueryExpression) HasNoKey(keys ...string) *jsonQueryExpression {
 	jsonQuery.keys = keys
 	jsonQuery.hasKeys = true
 	jsonQuery.keysOp = isNull
 	return jsonQuery
 }
 
-func (jsonQuery *JSONQueryExpression) setOp(inOp sqlOp, value any, keys ...string) *JSONQueryExpression {
+func (jsonQuery *jsonQueryExpression) setOp(inOp sqlOp, value any, keys ...string) *jsonQueryExpression {
 	jsonQuery.keys = keys
 	jsonQuery.op = inOp
 	jsonQuery.equalsValue = value
 	return jsonQuery
 }
 
-func (jsonQuery *JSONQueryExpression) Equals(value any, keys ...string) *JSONQueryExpression {
+func (jsonQuery *jsonQueryExpression) Equals(value any, keys ...string) *jsonQueryExpression {
 	return jsonQuery.setOp(equals, value, keys...)
 }
 
-func (jsonQuery *JSONQueryExpression) NotEquals(value any, keys ...string) *JSONQueryExpression {
+func (jsonQuery *jsonQueryExpression) NotEquals(value any, keys ...string) *jsonQueryExpression {
 	return jsonQuery.setOp(notEquals, value, keys...)
 }
 
-func (jsonQuery *JSONQueryExpression) GreaterThan(value any, keys ...string) *JSONQueryExpression {
+func (jsonQuery *jsonQueryExpression) GreaterThan(value any, keys ...string) *jsonQueryExpression {
 	jsonQuery.asType = "int"
 	return jsonQuery.setOp(greaterThan, value, keys...)
 }
 
-func (jsonQuery *JSONQueryExpression) LessThan(value any, keys ...string) *JSONQueryExpression {
+func (jsonQuery *jsonQueryExpression) LessThan(value any, keys ...string) *jsonQueryExpression {
 	jsonQuery.asType = "int"
 	return jsonQuery.setOp(lessThan, value, keys...)
 }
 
-func (jsonQuery *JSONQueryExpression) KeyIn(key string, values manifest.StringSet) *JSONQueryExpression {
+func (jsonQuery *jsonQueryExpression) KeyIn(key string, values manifest.StringSet) *jsonQueryExpression {
 	jsonQuery.keys = []string{key}
 	jsonQuery.op = isIn
 	jsonQuery.groupValueSet = values
@@ -102,7 +95,7 @@ func (jsonQuery *JSONQueryExpression) KeyIn(key string, values manifest.StringSe
 	return jsonQuery
 }
 
-func (jsonQuery *JSONQueryExpression) KeyNotIn(key string, values manifest.StringSet) *JSONQueryExpression {
+func (jsonQuery *jsonQueryExpression) KeyNotIn(key string, values manifest.StringSet) *jsonQueryExpression {
 	jsonQuery.keys = []string{key}
 	jsonQuery.op = isNotIn
 	jsonQuery.groupValueSet = values
@@ -139,7 +132,7 @@ func jsonQueryJoin(keys []string) string {
 }
 
 // Build implements clause.Expression
-func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
+func (jsonQuery *jsonQueryExpression) Build(builder clause.Builder) {
 	stmt, ok := builder.(*gorm.Statement)
 	if !ok {
 		return
@@ -148,12 +141,6 @@ func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
 	switch stmt.Dialector.Name() {
 	case "mysql", "sqlite":
 		switch {
-		case jsonQuery.extract:
-			builder.WriteString("JSON_EXTRACT(")
-			builder.WriteQuoted(jsonQuery.column)
-			builder.WriteByte(',')
-			builder.AddVar(stmt, prefixDotless+"."+jsonQuery.path)
-			builder.WriteString(")")
 		case jsonQuery.hasKeys:
 			if len(jsonQuery.keys) > 0 {
 				builder.WriteString("JSON_EXTRACT(")
@@ -202,10 +189,6 @@ func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
 		}
 	case "postgres":
 		switch {
-		case jsonQuery.extract:
-			builder.WriteString(fmt.Sprintf("json_extract_path_text(%v::json,", stmt.Quote(jsonQuery.column)))
-			stmt.AddVar(builder, jsonQuery.path)
-			builder.WriteByte(')')
 		case jsonQuery.hasKeys:
 			if len(jsonQuery.keys) > 0 {
 				stmt.WriteQuoted(jsonQuery.column)
@@ -274,17 +257,17 @@ func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
 
 }
 
-type JSONExtractExpression struct {
+type jsonExtractExpression struct {
 	column string
 }
 
 // JSONExtract extracts key,values as text from a Column holding JSON
-func JSONExtract(column string) *JSONExtractExpression {
-	return &JSONExtractExpression{column: column}
+func JSONExtract(column string) *jsonExtractExpression {
+	return &jsonExtractExpression{column: column}
 }
 
 // Build implements GORM Expression interface
-func (jsonQuery *JSONExtractExpression) Build(builder clause.Builder) {
+func (jsonQuery *jsonExtractExpression) Build(builder clause.Builder) {
 	stmt, ok := builder.(*gorm.Statement)
 	if !ok {
 		return

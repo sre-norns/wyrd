@@ -34,7 +34,7 @@ tidy:
 	go fmt ./...
 	go mod tidy -v
 
-## verify: Verfiy go moduels and run go vet on the project
+## verify: Verify go modules and run go vet on the project
 .PHONY: verify
 verify:
 	go mod verify
@@ -45,15 +45,14 @@ verify:
 staticcheck:
 	go run honnef.co/go/tools/cmd/staticcheck@latest -checks=all,-ST1000,-U1000 ./...
 
-## scan-vuln: Scan for known GO-vulnarabilities
+## scan-vuln: Scan for known GO-vulnerabilities
 .PHONY: scan-vuln
 scan-vuln:
 	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
 ## audit: run quality control checks
 .PHONY: audit
-audit: verify staticcheck # scan-vuln
-	go test -race -buildvcs -vet=off ./...
+audit: verify staticcheck test # scan-vuln
 
 
 # ==================================================================================== #
