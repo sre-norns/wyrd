@@ -98,7 +98,33 @@ To support the above query parameters, following code should be added to the han
 ```
 
 ### Middleware: `AuthBearerAPI`
-enables APIs to read Auth Bearer token.
+
+`AuthBearerAPI` extracts syntactically valid RFC 6750 Bearer credentials and
+stores the token in the Gin context. The scheme is case-insensitive; one or more
+ASCII spaces must separate it from a non-empty `b64token`. Tabs, leading or
+trailing whitespace, credential lists, and malformed token characters are
+rejected.
+
+Malformed credentials stop the handler chain with one safe `401 Unauthorized`
+response and `WWW-Authenticate: Bearer`. The response and parser errors never
+contain the supplied header or token. This middleware validates syntax only; it
+does not authenticate the token or make authorization decisions.
+
+```go
+api.GET("/artifacts",
+    bark.AuthBearerAPI(),
+    func(ctx *gin.Context) {
+        token := bark.RequireBearerToken(ctx)
+        // Authenticate token, then handle the request.
+    },
+)
+```
+
+Use `ParseBearer` when parsing outside Gin. It returns a
+`*BearerParseError`; callers can inspect `Kind()` with `errors.As`. Every parse
+failure also satisfies `errors.Is(err, bark.ErrInvalidAuthHeader)` for
+compatibility.
+
 ### Middleware: `ResourceAPI`
 Streamline implementation of APIs that serves a single resource.
 ### Middleware: `VersionedResourceAPI` 

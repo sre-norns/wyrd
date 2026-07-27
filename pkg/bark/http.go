@@ -3,7 +3,6 @@ package bark
 import (
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -19,12 +18,6 @@ const (
 	versionInfoKey       = "versionInfoKey"
 
 	resourceManifestKey = "resourceManifestKey"
-
-	authBearerKey = "Bearer"
-
-	// well known HTTP headers
-	// HTTPHeaderAuth is a standard [header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Authorization) to communicate authorization information
-	HTTPHeaderAuth = "Authorization"
 
 	// HTTPHeaderAccept is a standard [header](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Accept) communicating media format expected by the client
 	HTTPHeaderAccept = "Accept"
@@ -43,8 +36,6 @@ const (
 )
 
 var (
-	// ErrInvalidAuthHeader error indicates incorrectly former [Authorization](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Authorization) header in the message.
-	ErrInvalidAuthHeader = fmt.Errorf("invalid Authorization header")
 	// ErrWrongKind error indicates that [manifest.Kind] passed to an endpoint is not expected by that endpoint.
 	ErrWrongKind = fmt.Errorf("invalid resource kind for the API")
 
@@ -258,45 +249,6 @@ func RequireSearchQueryParams(ctx *gin.Context) SearchParams {
 // Note, the function should only be called from a handler that follows after [SearchableAPI] middleware in the filter chain.
 func RequireSearchQuery(ctx *gin.Context) manifest.SearchQuery {
 	return ctx.MustGet(searchQueryKey).(manifest.SearchQuery)
-}
-
-func extractAuthBearer(ctx *gin.Context) (string, error) {
-	// Get the "Authorization" header
-	authorization := ctx.Request.Header.Get(HTTPHeaderAuth)
-	if authorization == "" {
-		return "", ErrInvalidAuthHeader
-	}
-
-	// Split it into two parts - "Bearer" and token
-	parts := strings.SplitN(authorization, " ", 2)
-	if parts[0] != "Bearer" {
-		return "", ErrInvalidAuthHeader
-	}
-
-	return parts[1], nil
-}
-
-// AuthBearerAPI return a middleware that extracts "Bearer" token from an incoming request headers.
-// The middleware terminates call chain and return [http.StatusUnauthorized] to a client if there is no [HTTPHeaderAuth] headers set.
-// Note the middleware does not check if the token is "valid", only that it has been set.
-// See [RequireBearerToken] for information on how to access the token.
-func AuthBearerAPI() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		if token, err := extractAuthBearer(ctx); err != nil {
-			AbortWithError(ctx, http.StatusUnauthorized, err)
-			return
-		} else {
-			ctx.Set(authBearerKey, token)
-		}
-
-		ctx.Next()
-	}
-}
-
-// RequireBearerToken returns previously extracted "Bearer" token from the request context.
-// Note this function can only be called after [AuthBearerAPI] middleware in the request handler call-chain.
-func RequireBearerToken(ctx *gin.Context) string {
-	return ctx.MustGet(authBearerKey).(string)
 }
 
 // Monkey-patch GIN to respect other spelling of yaml mime-type
