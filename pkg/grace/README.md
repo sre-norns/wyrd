@@ -24,7 +24,8 @@ no more than a fixed number of work items are executed at any given time.
 Two error handling policies are available:
 
 `grace.NewWorkgroup` - fail-fast: the first work item to return an error cancels the group context.
-Work items in-flight are expected to observe that cancellation, items still queued are dropped:
+Work items in-flight are expected to observe that cancellation. Items already accepted, including queued
+items, are still invoked with the canceled context; later submissions are rejected:
 ```go
 
     workgroup := grace.NewWorkgroup(mainContext, runtime.NumCPU())
@@ -37,13 +38,13 @@ Work items in-flight are expected to observe that cancellation, items still queu
         }
     }
 
-    // Wait returns the first error reported by a work item, if any
+    // Wait returns the first non-cancellation work error, if any
     grace.FatalOnError(workgroup.Wait())
 
 ```
 
-`grace.NewCollectingWorkgroup` - collect-all: every work item submitted is executed regardless of errors
-reported by others, and `Wait` returns all of the errors joined with `errors.Join`:
+`grace.NewCollectingWorkgroup` - collect-all: every accepted work item is executed regardless of errors
+reported by others, and `Wait` returns a multi-error that supports `errors.Is` for every cause:
 ```go
 
     workgroup := grace.NewCollectingWorkgroup(mainContext, runtime.NumCPU())
@@ -58,4 +59,12 @@ reported by others, and `Wait` returns all of the errors joined with `errors.Joi
 ```
 
 Cancellation of the parent context cancels the group under either policy, in which case `Wait` reports
-the cause of that cancellation. `Wait` must be called to release resources held by the group context.
+the cause of that cancellation. If accepted work later reports a real failure, that failure is preserved
+alongside the cancellation.
+
+`Go` is safe to race with `Wait`: it either accepts an item that `Wait` waits for, or rejects it without
+invoking it. Concurrent and repeated `Wait` calls return the same result. `Go(nil)` returns
+`grace.ErrNilWorkItem`; calls after successful closure match `grace.ErrWorkgroupClosed`. A nil parent
+context is treated as `context.Background`, and a non-positive worker count selects one worker.
+
+`Wait` must be called to release resources held by the group context.

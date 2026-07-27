@@ -4,12 +4,12 @@ Shared context: [`CONTEXT.md`](../CONTEXT.md).
 
 | Field | Value |
 |---|---|
-| Status | `ready` |
+| Status | `done` |
 | Priority | `P0` |
 | Workstream | Lifecycle |
 | Depends on | — |
 | Likely conflicts | 016, 017 |
-| Owner | Unclaimed |
+| Owner | Codex |
 
 ## Why This Matters
 
@@ -115,12 +115,12 @@ context/dispatcher shutdown semantics and adds a goroutine to every Workgroup.
 
 ## Acceptance Criteria / Definition of Done
 
-- [ ] Stress/race tests cannot produce send-on-closed or wait-group misuse.
-- [ ] Accepted work always finishes before `Wait` returns.
-- [ ] Rejected work returns the shared terminal cause.
-- [ ] First real failure selection is deterministic.
-- [ ] Cancellation-only behavior remains recognizable as cancellation.
-- [ ] Concurrent/repeated `Wait` behavior is documented and tested.
+- [x] Stress/race tests cannot produce send-on-closed or wait-group misuse.
+- [x] Accepted work always finishes before `Wait` returns.
+- [x] Rejected work returns the shared terminal cause.
+- [x] First real failure selection is deterministic.
+- [x] Cancellation-only behavior remains recognizable as cancellation.
+- [x] Concurrent/repeated `Wait` behavior is documented and tested.
 
 ## Required Tests
 
@@ -143,9 +143,29 @@ git diff --check
 
 ## Completion Record
 
-- **Implemented:**
-- **Tests added/updated:**
-- **Documentation updated:**
-- **Compatibility/migration:**
-- **Validation evidence:**
-- **Follow-ups:**
+- **Implemented:** Serialized submission with channel closure; guaranteed invocation
+  of every accepted item; cached one result for all waiters; added a stable causal
+  multi-error shared by `Go`, `Context`, and `Wait`; explicitly forwarded and
+  cleaned up parent cancellation; rejected nil work safely; treated nil parents
+  as `context.Background`.
+- **Tests added/updated:** Added repeated concurrent `Go`/`Wait`/cancel stress,
+  accepted-work accounting, post-`Wait` rejection, cancellation before/during/
+  after acceptance, controlled failure precedence, mixed cancellation and real
+  failure, concurrent waiters, nil work, nil parent, parent metadata, and
+  negative worker-count coverage. Updated the original fail-fast assertion to
+  require every accepted item to run.
+- **Documentation updated:** Defined submission/closure linearization, accepted
+  work, canonical cause precedence, concurrent/repeated `Wait`, successful
+  closure, nil inputs, and invalid worker-count behavior in Go documentation and
+  `pkg/grace/README.md`.
+- **Compatibility/migration:** `Go` is now safe during/after `Wait`; after a
+  successful close its error matches `ErrWorkgroupClosed`. `Go(nil)` returns
+  `ErrNilWorkItem`. Already accepted queued work is now invoked with the canceled
+  context instead of being silently dropped. Callers should use `errors.Is` when
+  inspecting Workgroup results.
+- **Validation evidence:** `go test -race -count=100 ./pkg/grace` passed
+  (32.029s); `go test -race -count=1 ./...` passed; `go vet ./...` and
+  `git diff --check` passed.
+- **Follow-ups:** The first full-suite run reproduced the already-backlogged
+  order-sensitive `TestStringSet_Join/some-set` failure (tasks 011/020); the
+  immediate rerun passed. No new Workgroup follow-up remains.

@@ -65,7 +65,7 @@ Status values:
 | 012 | P0 | done | [Make bearer extraction total and standards-compliant](tasks/012-harden-bearer-authentication.md) | — | 013, 014 |
 | 013 | P0 | ready | [Deepen Bark response and error handling](tasks/013-deepen-bark-response-handling.md) | — | 007, 009, 012, 014 |
 | 014 | P1 | blocked | [Complete HTTP negotiation and middleware contracts](tasks/014-http-negotiation-and-middleware.md) | 013 | 009, 012, 013 |
-| 015 | P0 | ready | [Make Workgroup lifecycle linearizable](tasks/015-linearizable-workgroup-lifecycle.md) | — | 016, 017 |
+| 015 | P0 | done | [Make Workgroup lifecycle linearizable](tasks/015-linearizable-workgroup-lifecycle.md) | — | 016, 017 |
 | 016 | P1 | ready | [Preserve real failures and make actionable errors causal](tasks/016-causal-process-errors.md) | — | 015, 017 |
 | 017 | P1 | ready | [Own signal registration and cleanup explicitly](tasks/017-signal-lifecycle-ownership.md) | — | 015, 016 |
 | 018 | P1 | ready | [Define bounded and observable webhook delivery](tasks/018-resilient-webhook-delivery.md) | — | 009, 019, 020 |
