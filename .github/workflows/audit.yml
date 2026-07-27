@@ -1,0 +1,43 @@
+# Checks the module graph against the Go vulnerability database (govulncheck).
+# The weekly run catches advisories published against dependencies that have not changed.
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Security audit
+
+on:
+  push:
+    branches: [ "main" ]
+    paths: [ "go.mod", "go.sum", ".github/workflows/audit.yml" ]
+  pull_request:
+    branches: [ "main" ]
+    paths: [ "go.mod", "go.sum", ".github/workflows/audit.yml" ]
+  schedule:
+    # Monday 04:00 UTC.
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version-file: 'go.mod'
+
+    - name: Verify module checksums
+      run: go mod verify
+
+    - name: Vulnerabilities-Scan
+      run: make scan-vuln

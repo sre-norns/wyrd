@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # Actions are pinned by commit SHA, so a single PR per week keeps all of the
+    # workflows moving together instead of one PR per action.
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    # This is a library: the module graph is wide (gin, gorm, k8s apimachinery),
+    # thus non-breaking updates are batched and majors are raised on their own.
+    groups:
+      go-modules:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
