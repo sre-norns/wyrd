@@ -35,6 +35,12 @@ func (l Labels) Get(key string) string {
 	return l[key]
 }
 
+// Lookup returns the value for the provided label if it exists and whether the provided label exist
+func (l Labels) Lookup(label string) (value string, exists bool) {
+	val, exists := l[label]
+	return val, exists
+}
+
 func (l Labels) Slice() sort.StringSlice {
 	if l == nil {
 		return nil

@@ -30,8 +30,6 @@ type jsonQueryExpression struct {
 	column  string
 	keys    []string
 	hasKeys bool
-	// extract bool
-	path string
 
 	keysOp      sqlOp
 	op          sqlOp
