@@ -59,7 +59,7 @@ audit: verify staticcheck test # scan-vuln
 # DEVELOPMENT
 # ==================================================================================== #
 
-## test: run all tests
+## test: run all tests. Postgres-backed tests skip unless WYRD_TEST_POSTGRES_URL is set
 .PHONY: test
 test:
 	go test -v -race -buildvcs ./...

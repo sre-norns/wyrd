@@ -29,6 +29,8 @@ type transactionContext struct {
 	Order           orderDetails
 
 	withVersion *manifest.Version
+	scope       *manifest.ScopeRef
+	fields      FieldColumns
 }
 
 func newTransactionContext(config SchemaConfig) transactionContext {
@@ -105,6 +107,20 @@ func IncludeDeleted() Option {
 func WithVersion(v manifest.Version) Option {
 	return func(a any, tc transactionContext) transactionContext {
 		tc.withVersion = &v
+		return tc
+	}
+}
+
+// InScope limits an operation to resources in ref, and places resources it
+// creates or writes there.
+//
+// Reads, updates and deletes match only rows whose scope columns equal ref's
+// non-empty fields: an account-only ref therefore matches every project in that
+// account. Writes apply ref to the value first, and fail with
+// [manifest.ErrScopeMismatch] when the value already names another scope.
+func InScope(ref manifest.ScopeRef) Option {
+	return func(a any, tc transactionContext) transactionContext {
+		tc.scope = &ref
 		return tc
 	}
 }

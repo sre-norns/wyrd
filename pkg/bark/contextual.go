@@ -76,6 +76,9 @@ func (c *contextualResponse[T]) Found(resource T, exist bool, err error) {
 	} else if !exist {
 		c.AbortWithError(http.StatusNotFound, ErrResourceNotFound)
 	} else {
+		if version, ok := versionOf(resource); ok {
+			SetETag(c.ctx, version)
+		}
 		Ok(c.ctx, resource)
 	}
 }
@@ -121,4 +124,31 @@ func (c *contextualResponse[T]) listPage(results []T, total int64) {
 	}
 
 	MarshalResponse(c.ctx, http.StatusOK, NewPaginatedResponse(results, total, searchParams.Pagination, c.options...))
+}
+
+// Page responds with one page of a listing in the [ListResponse] shape. The
+// next link is built from page.Next, never inferred from the page being full,
+// and it carries the cursor in place of any offset or page parameters.
+func (c *contextualResponse[T]) Page(results []T, page manifest.Page, err error) {
+	if err != nil {
+		c.AbortWithError(http.StatusBadRequest, err)
+		return
+	}
+
+	if self := c.ctx.Request.URL; self != nil {
+		c.options = append(c.options, WithLink("self", manifest.HLink{Reference: self.String()}))
+
+		if page.Next != "" {
+			next := *self
+			query := next.Query()
+			for _, stale := range []string{"offset", "page", "cursor"} {
+				query.Del(stale)
+			}
+			query.Set("cursor", page.Next)
+			next.RawQuery = query.Encode()
+			c.options = append(c.options, WithLink("next", manifest.HLink{Reference: next.String()}))
+		}
+	}
+
+	MarshalResponse(c.ctx, http.StatusOK, NewListResponse(results, page, c.options...))
 }

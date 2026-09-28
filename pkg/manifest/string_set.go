@@ -41,6 +41,9 @@ func (s StringSet) Slice() sort.StringSlice {
 		l = append(l, key)
 	}
 
+	// Sorted, so that anything built from a set -- a joined string, SQL, a
+	// response body -- is the same every time rather than in map order.
+	l.Sort()
 	return l
 }
 

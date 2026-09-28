@@ -35,6 +35,11 @@ type SchemaConfig struct {
 	CreatedAtColumnName string
 	UpdatedAtColumnName string
 	DeletedAtColumnName string
+
+	// AccountColumnName and ProjectColumnName name the scope columns. A config
+	// without them cannot be used with [InScope].
+	AccountColumnName string
+	ProjectColumnName string
 }
 
 type rawJSONSQL struct {
@@ -46,6 +51,9 @@ type DBStore struct {
 	db *gorm.DB
 
 	config SchemaConfig
+
+	// visibility, when set, constrains every operation. See [Visibility].
+	visibility Visibility
 }
 
 // ManifestModel is the default schema config compatible with manifest.ObjectMeta
@@ -57,6 +65,8 @@ var ManifestModel = SchemaConfig{
 	CreatedAtColumnName: "created_at",
 	UpdatedAtColumnName: "updated_at",
 	DeletedAtColumnName: "deleted_at",
+	AccountColumnName:   "account_id",
+	ProjectColumnName:   "project_id",
 }
 
 // NewDBStore creates a new instance of DBStore:
@@ -79,12 +89,21 @@ func (c orderByColumn) Clause() clause.OrderByColumn {
 	}
 }
 
-func applyOptions(db *gorm.DB, config SchemaConfig, value any, options ...Option) (tx, ctx *gorm.DB) {
+// compileOptions folds options into one context, so that an operation can both
+// build its query from it and act on the value (placing it in a scope).
+func compileOptions(config SchemaConfig, value any, options ...Option) transactionContext {
 	tContext := newTransactionContext(config)
 	for _, o := range options {
 		tContext = o(value, tContext)
 	}
+	return tContext
+}
 
+func applyOptions(db *gorm.DB, config SchemaConfig, value any, options ...Option) (tx, ctx *gorm.DB, err error) {
+	return applyContext(db, config, compileOptions(config, value, options...))
+}
+
+func applyContext(db *gorm.DB, config SchemaConfig, tContext transactionContext) (tx, ctx *gorm.DB, err error) {
 	tx, ctx = db, db
 	if tContext.unScoped {
 		tx = tx.Unscoped()
@@ -101,7 +120,7 @@ func applyOptions(db *gorm.DB, config SchemaConfig, value any, options ...Option
 		args := []any{}
 		if !expand.Query.Empty() {
 			args = []any{func(db *gorm.DB) *gorm.DB {
-				stx, _, _ := withQuery(db, nil, config, expand.Query)
+				stx, _, _ := withQuery(db, nil, config, expand.Query, nil)
 				if expand.OrderBy.Column == "" {
 					return stx
 				}
@@ -121,6 +140,22 @@ func applyOptions(db *gorm.DB, config SchemaConfig, value any, options ...Option
 
 		ctx = ctx.Where(req)
 		tx = tx.Where(req)
+	}
+
+	if tContext.scope != nil {
+		if config.AccountColumnName == "" || config.ProjectColumnName == "" {
+			return nil, nil, ErrNoScopeColumns
+		}
+		if tContext.scope.Account != "" {
+			req := clause.Eq{Column: clause.Column{Name: config.AccountColumnName}, Value: tContext.scope.Account}
+			ctx = ctx.Where(req)
+			tx = tx.Where(req)
+		}
+		if tContext.scope.Project != "" {
+			req := clause.Eq{Column: clause.Column{Name: config.ProjectColumnName}, Value: tContext.scope.Project}
+			ctx = ctx.Where(req)
+			tx = tx.Where(req)
+		}
 	}
 
 	for _, orderBy := range tContext.Order.OrderColumns {
@@ -192,8 +227,9 @@ func limitTimeRange(tx *gorm.DB, column string, from time.Time, till time.Time) 
 
 func (s *DBStore) singleTransaction(ctx context.Context) *gormStoreTransaction {
 	return &gormStoreTransaction{
-		db:     s.db.WithContext(ctx),
-		config: s.config,
+		db:         s.db.WithContext(ctx),
+		config:     s.config,
+		visibility: s.visibility,
 	}
 }
 
@@ -216,8 +252,9 @@ func (s *DBStore) Ping(ctx context.Context) error {
 func (s *DBStore) Begin(ctx context.Context) (StoreTransaction, error) {
 	tx := s.db.WithContext(ctx).Begin()
 	return &gormStoreTransaction{
-		db:     tx,
-		config: s.config,
+		db:         tx,
+		config:     s.config,
+		visibility: s.visibility,
 	}, tx.Error
 }
 
@@ -235,9 +272,19 @@ func (s *DBStore) Create(ctx context.Context, value any, options ...Option) erro
 // This is an implementation of AssociationStore interface.
 // Using empty query will select all linked entries. Use with caution as in that case number of results returned from DB in unbounded.
 func (s *DBStore) FindLinked(ctx context.Context, dest any, link string, owner any, searchQuery manifest.SearchQuery, options ...Option) (totalCount int64, err error) {
-	tx, xtx := applyOptions(s.db.Model(owner).WithContext(ctx), s.config, dest, options...)
-	tx, xtx, err = withQuery(tx, xtx, s.config, searchQuery)
+	tc := compileOptions(s.config, dest, options...)
+	tx, xtx, err := applyContext(s.db.Model(owner).WithContext(ctx), s.config, tc)
 	if err != nil {
+		return
+	}
+	tx, xtx, err = withQuery(tx, xtx, s.config, searchQuery, tc.fields)
+	if err != nil {
+		return
+	}
+	if tx, err = filterVisible(ctx, s.visibility, tx, dest); err != nil {
+		return
+	}
+	if xtx, err = filterVisible(ctx, s.visibility, xtx, dest); err != nil {
 		return
 	}
 
@@ -315,9 +362,19 @@ func (s *DBStore) Restore(ctx context.Context, model any, id manifest.ResourceID
 // manifest.SearchQuery - defines limits and offset.
 // [options] control how results are returned and expansion of collections.
 func (s *DBStore) Find(ctx context.Context, dest any, searchQuery manifest.SearchQuery, options ...Option) (total int64, err error) {
-	tx, xtx := applyOptions(s.db.WithContext(ctx), s.config, dest, options...)
-	tx, xtx, err = withQuery(tx, xtx, s.config, searchQuery)
+	tc := compileOptions(s.config, dest, options...)
+	tx, xtx, err := applyContext(s.db.WithContext(ctx), s.config, tc)
 	if err != nil {
+		return 0, err
+	}
+	tx, xtx, err = withQuery(tx, xtx, s.config, searchQuery, tc.fields)
+	if err != nil {
+		return 0, err
+	}
+	if tx, err = filterVisible(ctx, s.visibility, tx, dest); err != nil {
+		return 0, err
+	}
+	if xtx, err = filterVisible(ctx, s.visibility, xtx, dest); err != nil {
 		return 0, err
 	}
 
@@ -334,9 +391,16 @@ func (s *DBStore) Find(ctx context.Context, dest any, searchQuery manifest.Searc
 // Type of the model argument determines which model to restore. No field of the value is used, thus a pointer to an default value can be safely passed.
 // searchQuery arguments selection matches and pagination.
 func (s *DBStore) FindNames(ctx context.Context, model any, searchQuery manifest.SearchQuery, options ...Option) (manifest.StringSet, error) {
-	tx, xtx := applyOptions(s.db.Model(model).WithContext(ctx), s.config, model, options...)
-	tx, _, err := withQuery(tx, xtx, s.config, searchQuery)
+	tc := compileOptions(s.config, model, options...)
+	tx, xtx, err := applyContext(s.db.Model(model).WithContext(ctx), s.config, tc)
 	if err != nil {
+		return nil, err
+	}
+	tx, _, err = withQuery(tx, xtx, s.config, searchQuery, tc.fields)
+	if err != nil {
+		return nil, err
+	}
+	if tx, err = filterVisible(ctx, s.visibility, tx, model); err != nil {
 		return nil, err
 	}
 
@@ -357,7 +421,13 @@ func (s *DBStore) FindNames(ctx context.Context, model any, searchQuery manifest
 // Type of the model argument determines which model to restore. No field of the value is used, thus a pointer to an default value can be safely passed.
 // searchQuery arguments selection matches and pagination.
 func (s *DBStore) FindLabels(ctx context.Context, model any, searchQuery manifest.SearchQuery, options ...Option) (manifest.StringSet, error) {
-	tx, _ := applyOptions(s.db.Model(model).WithContext(ctx), s.config, model, options...)
+	tx, _, err := applyOptions(s.db.Model(model).WithContext(ctx), s.config, model, options...)
+	if err != nil {
+		return nil, err
+	}
+	if tx, err = filterVisible(ctx, s.visibility, tx, model); err != nil {
+		return nil, err
+	}
 	// SELECT key, value FROM conversations, json_each(cast(conversations.labels as json));
 	tx = limitedQuery(tx, searchQuery).Clauses(clause.From{
 		Joins: []clause.Join{
@@ -384,7 +454,13 @@ func (s *DBStore) FindLabels(ctx context.Context, model any, searchQuery manifes
 // Type of the model argument determines which model to restore. No field of the value is used, thus a pointer to an default value can be safely passed.
 // searchQuery arguments selection matches and pagination.
 func (s *DBStore) FindLabelValues(ctx context.Context, model any, key string, searchQuery manifest.SearchQuery, options ...Option) (manifest.StringSet, error) {
-	tx, _ := applyOptions(s.db.Model(model).WithContext(ctx), s.config, model, options...)
+	tx, _, err := applyOptions(s.db.Model(model).WithContext(ctx), s.config, model, options...)
+	if err != nil {
+		return nil, err
+	}
+	if tx, err = filterVisible(ctx, s.visibility, tx, model); err != nil {
+		return nil, err
+	}
 	tx = limitedQuery(tx, searchQuery).Clauses(clause.From{
 		Joins: []clause.Join{
 			{
@@ -486,7 +562,7 @@ func withSelector(tx *gorm.DB, jcolumn string, selector manifest.Selector) (*gor
 	return tx, nil
 }
 
-func withQuery(tx, ctx *gorm.DB, cfg SchemaConfig, query manifest.SearchQuery) (selecting, counting *gorm.DB, err error) {
+func withQuery(tx, ctx *gorm.DB, cfg SchemaConfig, query manifest.SearchQuery, fields FieldColumns) (selecting, counting *gorm.DB, err error) {
 	// Apply name matcher if any
 	tx = matchName(tx, cfg.NameColumnName, query)
 	ctx = matchName(ctx, cfg.NameColumnName, query)
@@ -496,7 +572,19 @@ func withQuery(tx, ctx *gorm.DB, cfg SchemaConfig, query manifest.SearchQuery) (
 	ctx = limitTimeRange(ctx, cfg.CreatedAtColumnName, query.FromTime, query.TillTime)
 
 	tx, err = withSelector(tx, cfg.LabelsColumnName, query.Selector)
-	ctx, _ = withSelector(ctx, cfg.LabelsColumnName, query.Selector)
+	if err != nil {
+		return nil, nil, err
+	}
+	if ctx != nil {
+		ctx, _ = withSelector(ctx, cfg.LabelsColumnName, query.Selector)
+	}
+
+	if tx, err = withFields(tx, cfg, fields, query.Fields); err != nil {
+		return nil, nil, err
+	}
+	if ctx, err = withFields(ctx, cfg, fields, query.Fields); err != nil {
+		return nil, nil, err
+	}
 
 	// Apply offset and limit to the query
 	return limitedQuery(tx, query), ctx, err

@@ -2,6 +2,7 @@ package bark
 
 import (
 	"fmt"
+	"net/http"
 	"runtime/debug"
 	"time"
 
@@ -26,9 +27,26 @@ type (
 		TillTime string `uri:"till" form:"till" json:"till,omitempty" yaml:"till,omitempty" xml:"till"`
 	}
 
+	// Window is how a listing asks for a page (ADR 0001 §8): up to Limit rows,
+	// continuing from Cursor. Offset is accepted for clients that page by
+	// position; it is not combined with Cursor.
+	//
+	// OffsetParam and LimitParam are pointers so that an absent parameter can
+	// be told from zero, and so from the older page/pageSize pair they replace.
+	// They are not called Offset and Limit because [Pagination] already has
+	// methods of those names, and SearchParams embeds both.
+	Window struct {
+		OffsetParam *uint  `uri:"offset" form:"offset" json:"offset,omitempty" yaml:"offset,omitempty" xml:"offset"`
+		LimitParam  *uint  `uri:"limit" form:"limit" json:"limit,omitempty" yaml:"limit,omitempty" xml:"limit"`
+		Cursor      string `uri:"cursor" form:"cursor" json:"cursor,omitempty" yaml:"cursor,omitempty" xml:"cursor"`
+	}
+
 	// SearchParams represents grouping of query parameters commonly used by REST endpoint supporting search
 	SearchParams struct {
+		// Pagination is the older page/pageSize pair, kept as an alias for
+		// Window's offset/limit.
 		Pagination `uri:",inline" form:",inline" json:",inline" yaml:",inline"`
+		Window     `uri:",inline" form:",inline" json:",inline" yaml:",inline"`
 		Timerange  `uri:",inline" form:",inline" json:",inline" yaml:",inline"`
 
 		// Name is a fuzzy matched name of the resource to search for.
@@ -36,11 +54,38 @@ type (
 
 		// Filter label-based filter to narrow down results.
 		Filter string `uri:"labels" form:"labels" json:"labels,omitempty" yaml:"labels,omitempty" xml:"labels"`
+
+		// Fields is a selector over server-known attributes, in the label
+		// selector grammar. See [manifest.SearchQuery.Fields].
+		Fields string `uri:"fields" form:"fields" json:"fields,omitempty" yaml:"fields,omitempty" xml:"fields"`
+	}
+
+	// PageLimits bounds the page size a listing may ask for.
+	PageLimits struct {
+		// Default is the page size of a request that asks for none.
+		Default uint
+		// Max is the largest page returned, whatever is asked for.
+		Max uint
 	}
 )
 
+// DefaultPageLimits are the portfolio's list bounds (ADR 0001 §8).
+var DefaultPageLimits = PageLimits{Default: 100, Max: 1024}
+
 // API Response types
 type (
+
+	// ListResponse is a page of a listing (ADR 0001 §8). Items is always an
+	// array, empty rather than null on an empty page. Next is absent on the last
+	// page, and Total is absent when it was not counted.
+	ListResponse[T any] struct {
+		Items []T    `form:"items" json:"items" yaml:"items" xml:"items"`
+		Limit uint   `form:"limit" json:"limit" yaml:"limit" xml:"limit"`
+		Next  string `form:"next" json:"next,omitempty" yaml:"next,omitempty" xml:"next"`
+		Total *int64 `form:"total" json:"total,omitempty" yaml:"total,omitempty" xml:"total"`
+
+		manifest.HResponse `form:",inline" json:",inline" yaml:",inline"`
+	}
 
 	// PaginatedResponse represents common frame used to produce response that returns a collection of results
 	PaginatedResponse[T any] struct {
@@ -150,8 +195,33 @@ func (p Pagination) ClampLimit(maxLimit uint) Pagination {
 }
 
 // BuildQuery returns a [manifest.SearchQuery] query object if the [SearchParams] can be converted to it.
+//
+// defaultLimit is both the page size of a request asking for none and the cap:
+// the behaviour of releases before [PageLimits]. Use [SearchParams.BuildQueryWithLimits]
+// to set them apart.
 func (s SearchParams) BuildQuery(defaultLimit uint) (manifest.SearchQuery, error) {
+	return s.BuildQueryWithLimits(PageLimits{Default: defaultLimit, Max: defaultLimit})
+}
+
+// ErrConflictingPagination is returned when a request pages in two ways at once.
+var ErrConflictingPagination error = manifest.NewStatusError(http.StatusBadRequest, "conflicting-pagination", "conflicting pagination parameters")
+
+// BuildQueryWithLimits returns the [manifest.SearchQuery] the parameters ask
+// for, with the page size bounded by limits.
+func (s SearchParams) BuildQueryWithLimits(limits PageLimits) (manifest.SearchQuery, error) {
 	selector, err := manifest.ParseSelector(s.Filter)
+	if err != nil {
+		return manifest.SearchQuery{}, err
+	}
+
+	var fields manifest.Selector
+	if s.Fields != "" {
+		if fields, err = manifest.ParseSelector(s.Fields); err != nil {
+			return manifest.SearchQuery{}, fmt.Errorf("bad field selector: %w", err)
+		}
+	}
+
+	offset, limit, err := s.window(limits)
 	if err != nil {
 		return manifest.SearchQuery{}, err
 	}
@@ -181,17 +251,66 @@ func (s SearchParams) BuildQuery(defaultLimit uint) (manifest.SearchQuery, error
 		}
 	}
 
-	pagination := s.Pagination.ClampLimit(defaultLimit)
 	return manifest.SearchQuery{
 		Selector: selector,
+		Fields:   fields,
 		Name:     s.Name,
 
 		FromTime: from,
 		TillTime: till,
 
-		Offset: pagination.Offset(),
-		Limit:  pagination.Limit(),
+		Cursor: s.Cursor,
+		Offset: offset,
+		Limit:  limit,
 	}, nil
+}
+
+// window resolves the requested offset and limit. offset and limit take
+// precedence over the older page and pageSize, each on its own, rather than
+// being refused alongside them: consumers set a default pageSize before building
+// the query, and a client's explicit limit must still win over it.
+func (s SearchParams) window(limits PageLimits) (offset, limit uint, err error) {
+	if s.Cursor != "" && (s.Page != 0 || (s.OffsetParam != nil && *s.OffsetParam != 0)) {
+		return 0, 0, fmt.Errorf("%w: a cursor already says where the page starts", ErrConflictingPagination)
+	}
+
+	limit = s.PageSize
+	if s.LimitParam != nil {
+		limit = *s.LimitParam
+	}
+	if limit == 0 {
+		limit = limits.Default
+	}
+	if limits.Max > 0 && limit > limits.Max {
+		limit = limits.Max
+	}
+
+	offset = s.Page * limit
+	if s.OffsetParam != nil {
+		offset = *s.OffsetParam
+	}
+
+	return offset, limit, nil
+}
+
+// NewListResponse returns items as a page described by page. A nil items is
+// sent as an empty array.
+func NewListResponse[T any](items []T, page manifest.Page, options ...HResponseOption) ListResponse[T] {
+	if items == nil {
+		items = []T{}
+	}
+
+	result := ListResponse[T]{
+		Items: items,
+		Limit: page.Limit,
+		Next:  page.Next,
+		Total: page.Total,
+	}
+	for _, o := range options {
+		o(&result.HResponse)
+	}
+
+	return result
 }
 
 // NewPaginatedResponse creates a new paginated response with options to adjust HATEOAS response params

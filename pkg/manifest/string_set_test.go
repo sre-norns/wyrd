@@ -87,7 +87,7 @@ func TestStringSet_Join(t *testing.T) {
 		"some-set": {
 			given:  []string{"value", "test", "other"},
 			sep:    "!",
-			expect: "value!test!other",
+			expect: "other!test!value",
 		},
 	}
 

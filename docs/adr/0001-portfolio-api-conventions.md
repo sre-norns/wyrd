@@ -133,9 +133,18 @@ the offending input using the same paths the envelope uses.
 ### 7. POSTs are safe to retry
 
 Every `POST` that creates or changes state accepts an `Idempotency-Key` header (≤ 200
-bytes). The key is recorded with a digest of the request body in the same transaction as
-the effect. A replay returns the recorded response; a reused key with a different body
-returns `409 idempotency-conflict`.
+bytes). The key is recorded with a digest of the request's method, path and body. A replay
+returns the recorded response; a reused key with a different request returns
+`409 idempotency-conflict`, and a key whose first request is still executing returns
+`409 idempotency-in-progress`.
+
+The shared middleware (`bark.Idempotent`) reserves the key *before* the handler runs, so two
+concurrent copies of a request cannot both execute, and records the outcome *after* it
+returns. It does not commit the record in the handler's transaction: a process that dies
+between the effect and the record leaves a reservation that expires after its lease, and the
+retry then executes again. That is at-most-once while the process lives, not exactly-once. A
+product whose effects must be exactly-once records inside its own transaction, as Exp-Bench
+does today; the middleware is for the rest.
 
 The key is **required** on user-facing POSTs. A route may be exempted only when it is
 idempotent by construction and documents why. Urth's run claim is the model case: a repeat
@@ -155,7 +164,8 @@ claim by the same worker for the same dispatch already returns the same lease.
 - `total` is advisory unless a product documents it as exact. It may be counted in a
   separate statement from the page, and a client must not use it to compute page links.
 - `offset` is accepted for compatibility, with Urth's `page`/`pageSize` mapped onto it, for
-  one minor release. Offset pages skip or repeat rows when earlier rows change; that is
+  one minor release. When both styles are present, `offset` and `limit` take precedence; it
+  is not an error, because servers preset a default `pageSize` before reading the request. Offset pages skip or repeat rows when earlier rows change; that is
   the reason the cursor is the contract.
 
 ### 9. Labels and fields are filtered separately

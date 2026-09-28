@@ -40,11 +40,13 @@ func ExemplarType(spec any) (reflect.Type, error) {
 // obj, err := manifest.RegisterKind(manifest.Kind("mySpec"), &MySpec{})
 // ```
 // Note: it is an error to double register the same `kind`.
-func RegisterKind(kind Kind, spec any) error {
-	return RegisterManifest(kind, spec, nil)
+func RegisterKind(kind Kind, spec any, options ...KindOption) error {
+	return RegisterManifest(kind, spec, nil, options...)
 }
 
-func RegisterManifest(kind Kind, spec, status any) error {
+// RegisterManifest associates kind with its spec and status types. Options such
+// as [WithScope] declare more about the kind.
+func RegisterManifest(kind Kind, spec, status any, options ...KindOption) error {
 	if _, know := metaKindRegistry[kind]; know {
 		return fmt.Errorf("kind %q already registered", kind)
 	}
@@ -62,24 +64,32 @@ func RegisterManifest(kind Kind, spec, status any) error {
 		return ErrUnexpectedSpecType
 	}
 
-	metaKindRegistry[kind] = KindSpec{
+	kindSpec := KindSpec{
 		SpecType:   specType,
 		StatusType: statusType,
 	}
+	for _, option := range options {
+		option(&kindSpec)
+	}
+	if scope := kindSpec.ResourceScope(); scope != ScopeSystem && scope != ScopeAccount && scope != ScopeProject {
+		return fmt.Errorf("%w: kind %q declares unknown scope %q", ErrInvalidScope, kind, scope)
+	}
+
+	metaKindRegistry[kind] = kindSpec
 
 	return nil
 }
 
 // MustRegisterKind calls RegisterKind to registers a kind and panics on error.
-func MustRegisterKind(kind Kind, proto any) {
-	if err := RegisterKind(kind, proto); err != nil {
+func MustRegisterKind(kind Kind, proto any, options ...KindOption) {
+	if err := RegisterKind(kind, proto, options...); err != nil {
 		panic(err)
 	}
 }
 
 // MustRegisterManifest registers types for a stateful manifest and panics on error.
-func MustRegisterManifest(kind Kind, specType, statusType any) {
-	if err := RegisterManifest(kind, specType, statusType); err != nil {
+func MustRegisterManifest(kind Kind, specType, statusType any, options ...KindOption) {
+	if err := RegisterManifest(kind, specType, statusType, options...); err != nil {
 		panic(err)
 	}
 }
@@ -168,8 +178,23 @@ type ObjectMeta struct {
 	Version Version `form:"version,omitempty" json:"version,omitempty" yaml:"version,omitempty" xml:"version,omitempty" gorm:"default:1"`
 
 	// Name is a unique identifier of a resource provided by the resource owner.
+	// It is unique within the resource's scope (Account and Project), not
+	// globally: two projects may each have a resource of the same name.
 	// see: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/
-	Name ResourceName `form:"name,omitempty" json:"name" yaml:"name" gorm:"index;index:,unique,composite:deleted_name;not null"`
+	Name ResourceName `form:"name,omitempty" json:"name" yaml:"name" gorm:"index;index:,unique,composite:scoped_name,priority:3;not null"`
+
+	// Account is the account that owns the resource, for account- and
+	// project-scoped kinds. Empty for system-scoped kinds.
+	// Server-owned: it is taken from the request, never from the body. See [Scope].
+	//
+	// Stored as text rather than uuid: the identity tables these IDs come from
+	// store them as text, and Postgres will not compare a uuid column with a
+	// text one without a cast.
+	Account ResourceID `form:"account,omitempty" json:"account,omitempty" yaml:"account,omitempty" xml:"account,omitempty" gorm:"column:account_id;not null;default:'';index:,unique,composite:scoped_name,priority:1"`
+
+	// Project is the project that owns the resource, for project-scoped kinds.
+	// Empty otherwise. Server-owned, as Account is.
+	Project ResourceID `form:"project,omitempty" json:"project,omitempty" yaml:"project,omitempty" xml:"project,omitempty" gorm:"column:project_id;not null;default:'';index:,unique,composite:scoped_name,priority:2"`
 
 	// Labels is map of string keys and values that can be used to organize and categorize
 	// (scope and select) resources.
@@ -187,7 +212,7 @@ type ObjectMeta struct {
 	// This time is recorded to implement 'tombstones' - objects content may be deleted, while the record of its deletion is retained.
 	// It is populated by the system and clients may not set this value.
 	// Read-only.
-	DeletedAt *gorm.DeletedAt `form:"deletionTimestamp,omitempty" json:"deletionTimestamp,omitempty" yaml:"deletionTimestamp,omitempty" xml:"deletionTimestamp,omitempty" gorm:"index:,composite:deleted_name,option:NULLS NOT DISTINCT"`
+	DeletedAt *gorm.DeletedAt `form:"deletionTimestamp,omitempty" json:"deletionTimestamp,omitempty" yaml:"deletionTimestamp,omitempty" xml:"deletionTimestamp,omitempty" gorm:"index:,composite:scoped_name,priority:4,option:NULLS NOT DISTINCT"`
 }
 
 func (m *ObjectMeta) BeforeCreate(tx *gorm.DB) (err error) {

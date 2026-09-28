@@ -61,12 +61,15 @@ func (c Config) Dialector() (gorm.Dialector, error) {
 	}
 
 	dsn := strings.Join(extraParams, " ")
-	switch u.Driver {
+	// Matched on the dialect, not on the Go driver xo/dburl would use: from
+	// dburl v0.32 a postgres:// URL reports the "pgx" driver, and matching
+	// Driver alone left every Postgres URL unsupported.
+	switch u.UnaliasedDriver {
 	case "sqlite3", "sqlite":
 		return sqlite.Open(u.DSN), nil
 	case "mysql":
 		return mysql.Open(u.DSN), nil
-	case "postgres":
+	case "postgres", "pgx":
 		return postgres.Open(dsn), nil
 	default:
 		// return sql.Open(dsn)
