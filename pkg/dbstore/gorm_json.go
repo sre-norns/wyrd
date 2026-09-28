@@ -274,11 +274,9 @@ func (jsonQuery *jsonQueryExpression) writeInteger(stmt *gorm.Statement, dialect
 // writeOperand writes the value or value set a comparison is against.
 func (jsonQuery *jsonQueryExpression) writeOperand(stmt *gorm.Statement, dialect string) {
 	if jsonQuery.groupOp {
-		// Sorted, so that the same selector always renders the same SQL.
+		// StringSet.Slice is sorted, so a selector always renders the same SQL.
 		stmt.WriteString("(")
-		values := jsonQuery.groupValueSet.Slice()
-		values.Sort()
-		for idx, v := range values {
+		for idx, v := range jsonQuery.groupValueSet.Slice() {
 			if idx > 0 {
 				stmt.WriteByte(',')
 			}

@@ -217,8 +217,17 @@ func AcceptContentTypeAPI(accept ...string) gin.HandlerFunc {
 }
 
 // SearchableAPI return middleware to support for [SearchQuery] parameter.
-// See [RequireSearchQuery] usage on how to obtain [SearchQuery] value in the request handler
+// See [RequireSearchQuery] usage on how to obtain [SearchQuery] value in the request handler.
+//
+// defaultPaginationLimit is both the default page size and the cap. Use
+// [SearchableAPIWithLimits] to set them apart.
 func SearchableAPI(defaultPaginationLimit uint) gin.HandlerFunc {
+	return SearchableAPIWithLimits(PageLimits{Default: defaultPaginationLimit, Max: defaultPaginationLimit})
+}
+
+// SearchableAPIWithLimits is [SearchableAPI] with the default page size and the
+// cap set separately, as [DefaultPageLimits] does.
+func SearchableAPIWithLimits(limits PageLimits) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var searchParams SearchParams
 		if err := ctx.ShouldBindQuery(&searchParams); err != nil {
@@ -226,11 +235,11 @@ func SearchableAPI(defaultPaginationLimit uint) gin.HandlerFunc {
 			return
 		}
 
-		if searchQuery, err := searchParams.BuildQuery(defaultPaginationLimit); err != nil {
+		if searchQuery, err := searchParams.BuildQueryWithLimits(limits); err != nil {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, NewErrorResponse(http.StatusBadRequest, fmt.Errorf("bad search query: %w", err)))
 			return
 		} else {
-			searchParams.Pagination = searchParams.Pagination.ClampLimit(defaultPaginationLimit)
+			searchParams.Pagination = searchParams.Pagination.ClampLimit(limits.Max)
 
 			ctx.Set(searchQueryParamsKey, searchParams)
 			ctx.Set(searchQueryKey, searchQuery)

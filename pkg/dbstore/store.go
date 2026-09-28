@@ -30,6 +30,7 @@ type transactionContext struct {
 
 	withVersion *manifest.Version
 	scope       *manifest.ScopeRef
+	fields      FieldColumns
 }
 
 func newTransactionContext(config SchemaConfig) transactionContext {
