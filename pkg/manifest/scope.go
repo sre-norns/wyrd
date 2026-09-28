@@ -1,8 +1,8 @@
 package manifest
 
 import (
-	"errors"
 	"fmt"
+	"net/http"
 )
 
 // Scope says where the resources of a kind live, and so which of
@@ -23,14 +23,14 @@ var (
 	// ErrInvalidScope is returned when a scope reference does not fit the scope
 	// of the kind it is used with: a project-scoped resource without a project,
 	// or a system-scoped one naming an account.
-	ErrInvalidScope = errors.New("invalid resource scope")
+	ErrInvalidScope error = NewStatusError(http.StatusBadRequest, "invalid-scope", "invalid resource scope")
 
 	// ErrScopeMismatch is returned when a resource already names a scope other
 	// than the one it is being placed in. The scope comes from the request, and
 	// a body naming a different one is refused rather than silently corrected:
 	// correcting it would make applying a manifest copied from another project
 	// appear to succeed while writing somewhere its author did not mean.
-	ErrScopeMismatch = errors.New("resource scope does not match the request")
+	ErrScopeMismatch error = NewStatusError(http.StatusBadRequest, "scope-mismatch", "resource scope does not match the request")
 )
 
 // ScopeRef identifies the account and project a resource belongs to.

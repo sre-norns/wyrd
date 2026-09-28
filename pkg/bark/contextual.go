@@ -76,6 +76,9 @@ func (c *contextualResponse[T]) Found(resource T, exist bool, err error) {
 	} else if !exist {
 		c.AbortWithError(http.StatusNotFound, ErrResourceNotFound)
 	} else {
+		if version, ok := versionOf(resource); ok {
+			SetETag(c.ctx, version)
+		}
 		Ok(c.ctx, resource)
 	}
 }

@@ -1,8 +1,8 @@
 package dbstore
 
 import (
-	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 
 	"github.com/sre-norns/wyrd/pkg/manifest"
@@ -13,7 +13,7 @@ import (
 // ErrUnknownField is returned when a field selector names an attribute that is
 // not selectable. It is reported before any SQL runs: an unknown field silently
 // matching everything would read as a filter that worked.
-var ErrUnknownField = errors.New("field is not selectable")
+var ErrUnknownField error = manifest.NewStatusError(http.StatusBadRequest, "unknown-field", "field is not selectable")
 
 // FieldColumns maps selectable field paths, as a client writes them, to the
 // columns that hold them. See [Fields].

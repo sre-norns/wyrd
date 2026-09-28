@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/sre-norns/wyrd/pkg/manifest"
 	"gorm.io/gorm"
@@ -14,7 +15,7 @@ var (
 	// caller cannot see. It is distinct from not-found so that the store never
 	// turns it into a create, but a caller should report it as not found: saying
 	// more would disclose that the resource exists.
-	ErrNotVisible = errors.New("resource is not visible to the caller")
+	ErrNotVisible error = manifest.NewStatusError(http.StatusNotFound, "not-found", "resource is not visible to the caller")
 
 	// ErrNoScopeColumns is returned when [InScope] is used with a [SchemaConfig]
 	// that does not name the scope columns.

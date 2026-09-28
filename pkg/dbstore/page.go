@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
 	"time"
 
@@ -23,12 +23,12 @@ const (
 
 var (
 	// ErrInvalidCursor is returned for a cursor this store did not produce.
-	ErrInvalidCursor = errors.New("invalid page cursor")
+	ErrInvalidCursor error = manifest.NewStatusError(http.StatusBadRequest, "invalid-cursor", "invalid page cursor")
 
 	// ErrConflictingPagination is returned when a query asks to continue from a
 	// cursor and to skip by offset at once, or orders a cursor listing
 	// differently from the order the cursor encodes.
-	ErrConflictingPagination = errors.New("conflicting pagination")
+	ErrConflictingPagination error = manifest.NewStatusError(http.StatusBadRequest, "conflicting-pagination", "conflicting pagination")
 )
 
 // Page describes one page of a listing. See [manifest.Page].

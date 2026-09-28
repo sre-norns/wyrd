@@ -2,6 +2,7 @@ package bark
 
 import (
 	"fmt"
+	"net/http"
 	"runtime/debug"
 	"time"
 
@@ -37,7 +38,7 @@ type (
 	Window struct {
 		OffsetParam *uint  `uri:"offset" form:"offset" json:"offset,omitempty" yaml:"offset,omitempty" xml:"offset"`
 		LimitParam  *uint  `uri:"limit" form:"limit" json:"limit,omitempty" yaml:"limit,omitempty" xml:"limit"`
-		Cursor string `uri:"cursor" form:"cursor" json:"cursor,omitempty" yaml:"cursor,omitempty" xml:"cursor"`
+		Cursor      string `uri:"cursor" form:"cursor" json:"cursor,omitempty" yaml:"cursor,omitempty" xml:"cursor"`
 	}
 
 	// SearchParams represents grouping of query parameters commonly used by REST endpoint supporting search
@@ -203,7 +204,7 @@ func (s SearchParams) BuildQuery(defaultLimit uint) (manifest.SearchQuery, error
 }
 
 // ErrConflictingPagination is returned when a request pages in two ways at once.
-var ErrConflictingPagination = fmt.Errorf("conflicting pagination parameters")
+var ErrConflictingPagination error = manifest.NewStatusError(http.StatusBadRequest, "conflicting-pagination", "conflicting pagination parameters")
 
 // BuildQueryWithLimits returns the [manifest.SearchQuery] the parameters ask
 // for, with the page size bounded by limits.
