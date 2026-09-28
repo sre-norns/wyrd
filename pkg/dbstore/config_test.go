@@ -27,6 +27,15 @@ func TestConfig_Dialector(t *testing.T) {
 				URL: "postgres://localhost:5432",
 			},
 		},
+		// xo/dburl reports these with the "pgx" driver from v0.32 on.
+		"postgresql-scheme": {
+			expect: "postgres",
+			given:  dbstore.Config{URL: "postgresql://u:p@localhost:5432/db?sslmode=disable"},
+		},
+		"pgx-scheme": {
+			expect: "postgres",
+			given:  dbstore.Config{URL: "pgx://u:p@localhost:5432/db"},
+		},
 		"inmem-is-sqlite": {
 			expect: "sqlite",
 			given: dbstore.Config{
