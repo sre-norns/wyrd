@@ -40,11 +40,14 @@ func TestObjectMetaIndexesArePerTable(t *testing.T) {
 			if len(cols) == 1 && cols[0] == "name" {
 				nameIndexed = true
 			}
-			if unique, _ := idx.Unique(); unique && len(cols) == 2 {
+			// Names are unique per scope: the unique index leads with the scope
+			// columns so that it also serves "everything in this project".
+			if unique, _ := idx.Unique(); unique && len(cols) == 4 &&
+				cols[0] == "account_id" && cols[1] == "project_id" && cols[2] == "name" && cols[3] == "deleted_at" {
 				nameUnique = true
 			}
 		}
 		require.True(t, nameIndexed, "%T: no index on name", model)
-		require.True(t, nameUnique, "%T: no unique (name, deleted_at) index", model)
+		require.True(t, nameUnique, "%T: no unique (account_id, project_id, name, deleted_at) index", model)
 	}
 }

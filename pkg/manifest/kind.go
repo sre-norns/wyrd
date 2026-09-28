@@ -12,6 +12,10 @@ type Kind string
 type KindSpec struct {
 	SpecType   reflect.Type
 	StatusType reflect.Type
+
+	// Scope is where the kind's resources live. Empty means [ScopeSystem]; use
+	// [KindSpec.ResourceScope] rather than reading it directly.
+	Scope Scope
 }
 
 var (

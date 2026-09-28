@@ -1,6 +1,7 @@
 package dbstore
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -12,6 +13,12 @@ type gormStoreTransaction struct {
 	db *gorm.DB
 
 	config SchemaConfig
+
+	visibility Visibility
+}
+
+func (tx *gormStoreTransaction) context() context.Context {
+	return tx.db.Statement.Context
 }
 
 func (tx *gormStoreTransaction) Rollback() {
@@ -24,12 +31,38 @@ func (tx *gormStoreTransaction) Commit() error {
 }
 
 func (tx *gormStoreTransaction) Create(value any, options ...Option) error {
-	rtx, _ := applyOptions(tx.db, tx.config, value, options...)
+	tc := compileOptions(tx.config, value, options...)
+	if err := applyScope(tc, value); err != nil {
+		return err
+	}
+	if err := admit(tx.context(), tx.visibility, value); err != nil {
+		return err
+	}
+
+	rtx, _, err := applyContext(tx.db, tx.config, tc)
+	if err != nil {
+		return err
+	}
 	return rtx.Create(value).Error
 }
 
 func (tx *gormStoreTransaction) Update(newValue any, id manifest.ResourceID, options ...Option) (exists bool, err error) {
-	rtx, _ := applyOptions(tx.db.Model(newValue), tx.config, newValue, options...)
+	tc := compileOptions(tx.config, newValue, options...)
+	if err := applyScope(tc, newValue); err != nil {
+		return false, err
+	}
+	if err := admit(tx.context(), tx.visibility, newValue); err != nil {
+		return false, err
+	}
+
+	rtx, _, err := applyContext(tx.db.Model(newValue), tx.config, tc)
+	if err != nil {
+		return false, err
+	}
+	if rtx, err = filterVisible(tx.context(), tx.visibility, rtx, newValue); err != nil {
+		return false, err
+	}
+
 	rtx = rtx.Updates(newValue)
 	if errors.Is(rtx.Error, gorm.ErrRecordNotFound) {
 		return false, nil
@@ -39,7 +72,21 @@ func (tx *gormStoreTransaction) Update(newValue any, id manifest.ResourceID, opt
 }
 
 func (tx *gormStoreTransaction) CreateOrUpdate(newValue any, options ...Option) (exists bool, err error) {
-	rx, _ := applyOptions(tx.db, tx.config, newValue, options...)
+	tc := compileOptions(tx.config, newValue, options...)
+	if err := applyScope(tc, newValue); err != nil {
+		return false, err
+	}
+	if err := admit(tx.context(), tx.visibility, newValue); err != nil {
+		return false, err
+	}
+	if err := ensureVisibleIfExists(tx.context(), tx.visibility, tx.db, tx.config, newValue); err != nil {
+		return false, err
+	}
+
+	rx, _, err := applyContext(tx.db, tx.config, tc)
+	if err != nil {
+		return false, err
+	}
 	rx = rx.Save(newValue)
 	if errors.Is(rx.Error, gorm.ErrRecordNotFound) {
 		return false, nil
@@ -49,8 +96,15 @@ func (tx *gormStoreTransaction) CreateOrUpdate(newValue any, options ...Option) 
 }
 
 func (tx *gormStoreTransaction) GetByUID(dest any, id manifest.ResourceID, options ...Option) (bool, error) {
-	rx, _ := applyOptions(tx.db, tx.config, dest, options...)
-	rx = rx.First(dest, id)
+	rx, _, err := applyOptions(tx.db, tx.config, dest, options...)
+	if err != nil {
+		return false, err
+	}
+	if rx, err = filterVisible(tx.context(), tx.visibility, rx, dest); err != nil {
+		return false, err
+	}
+
+	rx = rx.First(dest, fmt.Sprintf("%s = ?", tx.config.IDColumnName), id)
 	if errors.Is(rx.Error, gorm.ErrRecordNotFound) {
 		return false, nil
 	}
@@ -58,8 +112,15 @@ func (tx *gormStoreTransaction) GetByUID(dest any, id manifest.ResourceID, optio
 }
 
 func (tx *gormStoreTransaction) GetByName(dest any, name manifest.ResourceName, options ...Option) (bool, error) {
-	rx, _ := applyOptions(tx.db, tx.config, dest, options...)
-	rx = rx.Where("name = ?", name).First(dest)
+	rx, _, err := applyOptions(tx.db, tx.config, dest, options...)
+	if err != nil {
+		return false, err
+	}
+	if rx, err = filterVisible(tx.context(), tx.visibility, rx, dest); err != nil {
+		return false, err
+	}
+
+	rx = rx.Where(fmt.Sprintf("%s = ?", tx.config.NameColumnName), name).First(dest)
 	if errors.Is(rx.Error, gorm.ErrRecordNotFound) {
 		return false, nil
 	}
@@ -67,11 +128,18 @@ func (tx *gormStoreTransaction) GetByName(dest any, name manifest.ResourceName, 
 }
 
 func (tx *gormStoreTransaction) Delete(value any, id manifest.ResourceID, version manifest.Version, options ...Option) (existed bool, err error) {
-	t, _ := applyOptions(tx.db, tx.config, value, options...)
+	t, _, err := applyOptions(tx.db, tx.config, value, options...)
+	if err != nil {
+		return false, err
+	}
+	if t, err = filterVisible(tx.context(), tx.visibility, t, value); err != nil {
+		return false, err
+	}
+
 	if version > 0 {
 		t = t.Where(fmt.Sprintf("%s = ?", tx.config.VersionColumnName), version)
 	}
-	rx := t.Delete(value, id)
+	rx := t.Delete(value, fmt.Sprintf("%s = ?", tx.config.IDColumnName), id)
 	if errors.Is(rx.Error, gorm.ErrRecordNotFound) {
 		return false, nil
 	}
@@ -79,7 +147,14 @@ func (tx *gormStoreTransaction) Delete(value any, id manifest.ResourceID, versio
 }
 
 func (tx *gormStoreTransaction) Restore(model any, id manifest.ResourceID, options ...Option) (existed bool, err error) {
-	rx, _ := applyOptions(tx.db.Model(model).Unscoped(), tx.config, nil, options...)
+	rx, _, err := applyOptions(tx.db.Model(model).Unscoped(), tx.config, nil, options...)
+	if err != nil {
+		return false, err
+	}
+	if rx, err = filterVisible(tx.context(), tx.visibility, rx, model); err != nil {
+		return false, err
+	}
+
 	rx = rx.Where(fmt.Sprintf("%s = ?", tx.config.IDColumnName), id).Where(fmt.Sprintf("%s IS NOT NULL", tx.config.DeletedAtColumnName)).Update(tx.config.DeletedAtColumnName, nil)
 	if errors.Is(rx.Error, gorm.ErrRecordNotFound) {
 		return false, nil
@@ -88,15 +163,31 @@ func (tx *gormStoreTransaction) Restore(model any, id manifest.ResourceID, optio
 }
 
 func (tx *gormStoreTransaction) AddLinked(value any, link string, owner any, options ...Option) error {
-	rx, _ := applyOptions(tx.db.Model(owner), tx.config, value, options...)
+	if err := admit(tx.context(), tx.visibility, owner); err != nil {
+		return err
+	}
+	if err := admit(tx.context(), tx.visibility, value); err != nil {
+		return err
+	}
+
+	rx, _, err := applyOptions(tx.db.Model(owner), tx.config, value, options...)
+	if err != nil {
+		return err
+	}
 	return rx.Association(link).Append(value)
 }
 
 func (tx *gormStoreTransaction) RemoveLinked(value any, link string, owner any) error {
+	if err := admit(tx.context(), tx.visibility, owner); err != nil {
+		return err
+	}
 	return tx.db.Model(owner).Association(link).Delete(value)
 }
 
 func (tx *gormStoreTransaction) ClearLinked(link string, owner any) error {
+	if err := admit(tx.context(), tx.visibility, owner); err != nil {
+		return err
+	}
 	return tx.db.Model(owner).Association(link).Clear()
 }
 
