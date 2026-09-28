@@ -169,7 +169,7 @@ type ObjectMeta struct {
 
 	// Name is a unique identifier of a resource provided by the resource owner.
 	// see: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/
-	Name ResourceName `form:"name,omitempty" json:"name" yaml:"name" gorm:"index:idx_name;index:,unique,composite:deleted_name;not null"`
+	Name ResourceName `form:"name,omitempty" json:"name" yaml:"name" gorm:"index;index:,unique,composite:deleted_name;not null"`
 
 	// Labels is map of string keys and values that can be used to organize and categorize
 	// (scope and select) resources.

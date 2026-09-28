@@ -468,6 +468,7 @@ func TestWorkgroup_NilWorkIsRejected(t *testing.T) {
 func TestWorkgroup_NilParentUsesBackgroundContext(t *testing.T) {
 	var wg *grace.Workgroup
 	require.NotPanics(t, func() {
+		//lint:ignore SA1012 this test exists to exercise the nil-parent fallback
 		wg = grace.NewWorkgroup(nil, 1)
 	})
 
