@@ -170,3 +170,28 @@ behaviour change found at that point is fixed in the module, not worked around i
   SQLite.
 - Exp-Bench's audit recorder becomes an adapter behind an interface, one level of
   indirection further from the writes it records.
+
+## M2 implementation note (2026-09-29)
+
+The implementation keeps the transaction-owning services in the root `identity`
+package. `model`, `authz`, `mail`, `pages`, `httpapi`, and `fakeidp` are separate
+packages. Authentication, providers, sessions and invitations share credential
+rotation, account provisioning, audit and delivery transactions. Splitting their
+implementation into the proposed sibling packages would require a second shared
+internal engine or cyclic imports. Their service interfaces remain separately
+accessible through `identity.Service`; there is one implementation.
+
+The first module release preserves Agent table/route names and legacy project
+fields. Machine names are public aliases. The M8 envelope conversion removes this
+compatibility boundary in a coordinated consumer release. Compatibility bridges
+also let Exp-Bench retain its existing private test fixtures while deleting the
+moved implementation.
+
+Registered kinds replace research-kind authorization and purge knowledge. Products
+supply audit projections, materialization, policy limits, grant read models and
+impact counts. The purge digest supports legacy and manifest metadata. The module
+has its own revision table and its own CI audit. It retains the source product's
+license in `identity/LICENSE`; the root module license does not change.
+
+The initial tag is `identity/v0.1.0`. Merge and publish it before resolving the
+consumer's final `go.sum`. M2 adds no Urth runtime dependency.

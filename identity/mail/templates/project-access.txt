@@ -1,0 +1,9 @@
+{{define "subject"}}Project access granted on {{.ProductName}}{{end}}{{define "body"}}You now have project administrator access to {{.Project}} in the {{.Account}} account on {{.ProductName}}.
+
+Open project:
+{{.URL}}
+
+If you need to sign in, use your existing credentials and select the {{.Account}} account. Your other account memberships stay unchanged. This link contains no credential; current access permissions apply when you open it.
+{{if .Footer}}
+{{.Footer}}
+{{end}}{{end}}

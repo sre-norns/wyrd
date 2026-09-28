@@ -1,0 +1,385 @@
+{{define "head"}}<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>{{.Title}} · {{$.ProductName}}</title>
+    <!-- prettier-ignore -->
+    <style>{{.Style}}</style>
+  </head>
+  <body>
+    <div class="glow" aria-hidden="true"></div>
+    <main>
+      <div class="brand">
+        <span class="mark" aria-hidden="true">↗</span>{{$.ProductName}}
+      </div>
+      {{end}} {{define "foot"}}
+      <p class="footer">
+        {{$.ProductName}} · Continuous experimentation{{if .PrivacyURL}} ·
+        <a href="{{.PrivacyURL}}">Privacy</a>{{end}}
+      </p>
+    </main>
+    <!-- prettier-ignore -->
+    <script>{{.Script}}</script>
+  </body>
+</html>
+{{end}} {{define "login"}}{{template "head" .}}
+<div class="layout">
+  <aside>
+    <span class="eyebrow">Workspace authorization</span>
+    <h1>Connect to your research.</h1>
+    <p class="description">
+      Configure projects. Inspect evidence. Track progress toward your
+      objectives.
+    </p>
+    <div class="client">
+      <small>Application requesting access</small><strong>{{.ClientID}}</strong>
+    </div>
+  </aside>
+  <section class="card">
+    <h2>Authorize {{$.ProductName}}</h2>
+    <p>Sign in to an account workspace or system administration.</p>
+    {{if .ChooseAuthority}}
+    <p role="status">
+      {{template "verified" .}} Select an authority to approve access.
+    </p>
+    {{end}} {{if and .AuthTicket .UserCode}}
+    <p>
+      Device code <strong class="device-code">{{.UserCode}}</strong>. Confirm
+      that it matches the code in your terminal.
+    </p>
+    {{end}} {{template "providers" .}}
+    <form method="post"{{if .Action}} action="{{.Action}}"{{end}}>
+      {{template "credentials" .}}
+      <div class="actions">
+        <button type="submit" name="decision" value="approve">
+          Approve access</button
+        ><button class="secondary" type="submit" name="decision" value="deny">
+          Deny access
+        </button>
+      </div>
+    </form>
+  </section>
+</div>
+{{template "foot" .}}{{end}} {{define "complete"}}{{template "head" .}}
+<section class="card completion">
+  <div class="result-mark {{if .Failed}}error-mark{{end}}" aria-hidden="true">
+    {{if .Failed}}!{{else}}✓{{end}}
+  </div>
+  <span class="eyebrow"
+    >{{if .WebLogin}}Account access{{else if .Failed}}Authorization
+    stopped{{else}}Authorization complete{{end}}</span
+  >
+  <h1>{{.Title}}</h1>
+  <p>{{.Message}}</p>
+  {{if .Retry}}
+  <div class="actions">
+    <a class="button secondary" href="{{.Retry}}"
+      >{{if .RetryLabel}}{{.RetryLabel}}{{else}}Return to
+      authorization{{end}}</a
+    >
+  </div>
+  {{end}}
+</section>
+{{template "foot" .}}{{end}} {{define "credentials"}}
+<input type="hidden" name="client_id" value="{{.ClientID}}" /><input
+  type="hidden"
+  name="redirect_uri"
+  value="{{.RedirectURI}}"
+/><input type="hidden" name="response_type" value="code" /><input
+  type="hidden"
+  name="code_challenge_method"
+  value="S256"
+/><input type="hidden" name="code_challenge" value="{{.Challenge}}" /><input
+  type="hidden"
+  name="state"
+  value="{{.State}}"
+/>
+<input
+  type="hidden"
+  name="preferred_context"
+  value="{{.PreferredContext}}"
+/>{{if .AuthTicket}}<input type="hidden" name="email" value="{{.Email}}" /><input
+  type="hidden"
+  name="auth_ticket"
+  value="{{.AuthTicket}}"
+/>{{if .UserCode}}<input type="hidden" name="user_code" value="{{.UserCode}}" />{{end}}{{else}}{{if .Device}}<label
+  >Device code<input
+    name="user_code"
+    value="{{.UserCode}}"
+    required
+    autocomplete="off"
+    spellcheck="false"
+  /><small>Enter the code shown in your terminal.</small></label
+>{{end}}<label
+  >Email<input
+    type="email"
+    name="email"
+    value="{{.Email}}"
+    required
+    autocomplete="username"
+    placeholder="you@example.com" /></label
+><label
+  >Password<input
+    type="password"
+    name="password"
+    required
+    autocomplete="current-password" /></label
+>{{end}}{{if or .ChooseAuthority (not .WebLogin)}}<label
+  >{{if .WebLogin}}Workspace{{else}}Authority{{end}}<select
+    name="authority_context"
+  >
+    <option value="">
+      {{if .WebLogin}}Select workspace{{else}}Select authority{{end}}
+    </option>
+    {{if .SystemAvailable}}
+    <option value="system">System administration</option>
+    {{end}} {{range .Accounts}}
+    <option value="{{.ID}}">{{.Name}}</option>
+    {{end}}</select
+  ><small
+    >{{if .WebLogin}}Select the workspace to open.{{else}}Sign in to see the
+    accounts and authority available to you.{{end}}</small
+  ></label
+>{{end}} {{end}} {{define "web-login"}}{{template "head" .}}
+<div class="layout">
+  <aside>
+    <span class="eyebrow">Continuous experimentation</span>
+    <h1>Experience the progress.</h1>
+    <p class="description">
+      Configure projects. Inspect evidence. Track progress toward your
+      objectives.
+    </p>
+  </aside>
+  <section class="card">
+    <h2>Log in</h2>
+    <p>Welcome to {{$.ProductName}}.</p>
+    {{if .AccountArchived}}
+    <p role="status">
+      Account deactivated. Account sessions and agent tokens are revoked. Stored
+      data remains archived.
+    </p>
+    {{end}} {{if .Failed}}
+    <p class="form-error" role="alert">{{.Message}}</p>
+    {{end}} {{if .ChooseAuthority}}
+    <p role="status">
+      {{template "verified" .}} Select a workspace to continue.
+    </p>
+    {{end}} {{template "providers" .}}
+    <form method="post"{{if .Action}} action="{{.Action}}"{{end}}>
+      {{template "credentials" .}}
+      <div class="actions">
+        <button class="login-submit" type="submit">Log in</button>
+      </div>
+    </form>
+    <div class="login-help">
+      <a href="/oauth/forgot-password">Forgot password?</a
+      ><a href="/oauth/register{{.OuterQuery}}">Create account</a>
+    </div>
+  </section>
+</div>
+{{template "foot" .}}{{end}} {{define "account-access"}}{{template "head" .}}
+<div class="layout">
+  <aside>
+    <span class="eyebrow">Continuous experimentation</span>
+    <h1>Experience the progress.</h1>
+    <p class="description">
+      Configure projects. Inspect evidence. Track progress toward your
+      objectives.
+    </p>
+  </aside>
+  <section class="card">
+    <h2>{{.Title}}</h2>
+    {{if eq .AccessForm "register"}}
+    <p>
+      {{if .Providers}}Continue with a provider, or start with your email.
+      {{end}}An email address creates your user after you verify it and choose
+      a password.
+    </p>
+    {{else if eq .AccessForm "forgot-password"}}
+    <p>Enter your email to request a password reset link.</p>
+    {{else}}
+    <p>Set a password for <strong>{{.Email}}</strong>.</p>
+    {{end}} {{if .Failed}}
+    <p class="form-error" role="alert">{{.Message}}</p>
+    {{end}} {{if eq .AccessForm "register"}}{{template "providers" .}}{{end}}
+    <form method="post" action="/oauth/{{.AccessForm}}">
+      {{if or (eq .AccessForm "register") (eq .AccessForm "forgot-password")}}
+      <label
+        >Email<input
+          type="email"
+          name="email"
+          value="{{.Email}}"
+          required
+          maxlength="254"
+          autocomplete="email"
+          placeholder="you@example.com"
+      /></label>
+      {{if eq .AccessForm "register"}}<label
+        >Account name<input
+          name="account_name"
+          value="{{.AccountName}}"
+          required
+          maxlength="200"
+          autocomplete="organization"
+          placeholder="Your team or organization" /></label
+      >{{end}} {{else}}
+      <input type="hidden" name="token" value="{{.Token}}" />
+      <label
+        >New password<input
+          type="password"
+          name="password"
+          required
+          minlength="12"
+          maxlength="72"
+          autocomplete="new-password"
+          aria-describedby="password-help"
+      /></label>
+      <small id="password-help"
+        >Use 12 to 72 bytes. You can use a passphrase.</small
+      >
+      <label
+        >Confirm password<input
+          type="password"
+          name="confirm_password"
+          required
+          minlength="12"
+          maxlength="72"
+          autocomplete="new-password"
+      /></label>
+      {{end}}
+      <div class="actions">
+        <button class="login-submit" type="submit">
+          {{if eq .AccessForm "register"}}Send verification link{{else if eq
+          .AccessForm "forgot-password"}}Send reset link{{else if eq .AccessForm
+          "verify-email"}}Create account{{else}}Update password{{end}}
+        </button>
+      </div>
+    </form>
+    <div class="login-help">
+      <a href="/sign-in">Back to login</a>{{if ne .AccessForm
+      "forgot-password"}}<a href="/oauth/forgot-password">Forgot password?</a
+      >{{end}}
+    </div>
+  </section>
+</div>
+{{template "foot" .}}{{end}} {{define "access-complete"}}{{template "head" .}}
+<section class="card completion">
+  <div class="result-mark" aria-hidden="true">✓</div>
+  <h1>{{.Title}}</h1>
+  <p role="status">{{.Message}}</p>
+  <div class="actions"><a class="button" href="/sign-in">Back to login</a></div>
+</section>
+{{template "foot" .}}{{end}}
+
+{{define "invitation"}}{{template "head" .}}
+<div class="layout">
+  <aside><span class="eyebrow">Account invitation</span><h1>Experience the progress.</h1><p class="description">Join a research account. Your other account memberships stay unchanged.</p></aside>
+  <section class="card">
+    <h2>{{.Title}}</h2>
+    {{if .Failed}}<p class="error" role="alert" id="invitation-error">{{.Message}}</p>{{end}}
+    {{with .Invitation}}
+    <p>{{.Inviter}} invites <strong>{{.Email}}</strong>.</p>
+    <p>Role: <strong>{{.Role}}</strong> · Expires {{.ExpiresAt.Format "02 Jan 2006 15:04 MST"}}</p>
+    {{if .AlreadyMember}}<p role="status">You are already a member. Your existing role stays unchanged.</p>{{else if .ExistingUser}}<p>Use a sign-in method of your existing user to join this account.</p>{{else}}<p>Continue with a provider or set a password to create your user and join this account. This does not create another account.</p>{{end}}
+    {{if .ProviderMethod}}
+    <p role="status">Signed in with {{providerLabel .ProviderMethod}}. Confirm to join the account.</p>
+    <form method="post">
+      <input type="hidden" name="csrf" value="{{.CSRF}}" />
+      <input type="hidden" name="client_id" value="{{.ClientID}}" />
+      <input type="hidden" name="redirect_uri" value="{{.RedirectURI}}" />
+      <input type="hidden" name="response_type" value="code" />
+      <input type="hidden" name="code_challenge_method" value="S256" />
+      <input type="hidden" name="code_challenge" value="{{.Challenge}}" />
+      <input type="hidden" name="state" value="{{.State}}" />
+      <input type="hidden" name="email" value="{{.Email}}" />
+      <input type="hidden" name="sign_in" value="provider" />
+      <div class="actions"><button type="submit" name="decision" value="join">{{if .AlreadyMember}}Open account{{else if .ExistingUser}}Join account{{else}}Create user and join account{{end}}</button></div>
+    </form>
+    <p class="divider"><span>or use another sign-in method</span></p>
+    {{end}}
+    {{template "providers" $}}
+    <form method="post">
+      <input type="hidden" name="csrf" value="{{.CSRF}}" />
+      <input type="hidden" name="client_id" value="{{.ClientID}}" />
+      <input type="hidden" name="redirect_uri" value="{{.RedirectURI}}" />
+      <input type="hidden" name="response_type" value="code" />
+      <input type="hidden" name="code_challenge_method" value="S256" />
+      <input type="hidden" name="code_challenge" value="{{.Challenge}}" />
+      <input type="hidden" name="state" value="{{.State}}" />
+      <label>Email<input name="email" type="email" value="{{.Email}}" readonly autocomplete="username" /></label>
+      <label>{{if .ExistingUser}}Password{{else}}New password{{end}}<input type="password" name="password" required autocomplete="{{if .ExistingUser}}current-password{{else}}new-password{{end}}" {{if $.Failed}}aria-describedby="invitation-error"{{end}} /></label>
+      {{if not .ExistingUser}}<input type="hidden" name="new_user" value="true" /><small>Use 12 to 72 bytes. You can use a passphrase.</small><label>Confirm password<input type="password" name="confirm_password" required autocomplete="new-password" /></label>{{end}}
+      <div class="actions"><button type="submit" name="decision" value="join">{{if .AlreadyMember}}Log in and open account{{else if .ExistingUser}}Log in and join account{{else}}Create user and join account{{end}}</button></div>
+    </form>
+    {{if .ExistingUser}}<p><a href="/oauth/forgot-password">Forgot password?</a> Reopen this invitation after resetting your password.</p>{{end}}
+    {{end}}
+    <p><a href="/invitations/cancel">Not now</a></p>
+  </section>
+</div>
+{{template "foot" .}}{{end}}
+{{define "provider-account"}}{{template "head" .}}
+<section class="card completion">
+  <span class="eyebrow">Account access</span>
+  <h1>Create account</h1>
+  <p>
+    {{providerLabel .Provider}} confirmed your
+    identity. Enter a name for your new {{$.ProductName}} account. We then send a
+    confirmation link to your email address.
+  </p>
+  {{if .Failed}}
+  <p class="form-error" role="alert">{{.Message}}</p>
+  {{end}}
+  <form method="post" action="/oauth/providers/registration">
+    <label
+      >Account name<input
+        name="account_name"
+        value="{{.AccountName}}"
+        required
+        maxlength="200"
+        autocomplete="organization"
+        {{if .Fields.account_name}}aria-invalid="true"
+        aria-describedby="account-name-error"{{end}} />{{if .Fields.account_name}}<small
+        id="account-name-error"
+        >{{.Fields.account_name}}</small
+      >{{end}}</label
+    >
+    <div class="actions">
+      <button type="submit">Send confirmation</button>
+      <a class="button secondary" href="/sign-in">Cancel</a>
+    </div>
+  </form>
+</section>
+{{template "foot" .}}{{end}} {{define "provider-confirm"}}{{template "head" .}}
+<section class="card completion">
+  <span class="eyebrow">Account access</span>
+  <h1>Confirm {{providerLabel .Provider}} sign-in</h1>
+  {{with .Confirmation}}{{if .Register}}
+  <p>
+    Create the {{$.ProductName}} account <strong>{{.AccountName}}</strong> for
+    {{.Email}}. You become its owner.
+  </p>
+  {{else}}
+  <p>
+    Link this {{providerLabel .Provider}} account
+    to the {{$.ProductName}} user {{.Email}}. You can then log in with it.
+  </p>
+  {{end}}{{end}}
+  <form method="post" action="/oauth/providers/confirmation">
+    <input type="hidden" name="token" value="{{.Token}}" />
+    <div class="actions">
+      <button type="submit">Confirm</button>
+    </div>
+  </form>
+</section>
+{{template "foot" .}}{{end}}
+{{define "verified"}}{{if and .AuthenticationMethod (ne .AuthenticationMethod "password")}}Signed in with {{providerLabel .AuthenticationMethod}}.{{else}}Sign-in details verified.{{end}}{{end}}
+{{define "providers"}}{{if .ShowProviders}}
+<div class="providers" role="group" aria-label="Sign-in providers">
+  {{range .Providers}}<a class="button secondary provider" href="{{$.ProviderLink .}}">Continue with {{providerLabel .}}</a>{{end}}
+</div>
+<p class="divider">
+  <span>{{if $.Invitation}}or use a password{{else}}or use your email{{end}}</span>
+</p>
+{{end}}{{end}}

@@ -1,0 +1,5 @@
+package identity
+
+type StorageUserSignInMethod = userSignInMethod
+type StorageUpstreamAuthTransaction = upstreamAuthTransaction
+type StorageProviderConfirmation = providerConfirmation

@@ -1,0 +1,156 @@
+package pages
+
+import (
+	"crypto/sha256"
+	_ "embed"
+	"encoding/base64"
+	"fmt"
+	"html/template"
+	"net/url"
+	"strings"
+
+	"github.com/gin-gonic/gin"
+	server "github.com/sre-norns/wyrd/identity"
+)
+
+//go:embed pages/oauth.css
+var oauthStyle string
+
+//go:embed pages/oauth.html
+var oauthHTML string
+
+//go:embed pages/password.js
+var passwordScript string
+
+// ValidPrivacyURL accepts an empty value, an absolute https URL, or a path on
+// this host.
+func ValidPrivacyURL(value string) error {
+	if value == "" || (strings.HasPrefix(value, "/") && !strings.HasPrefix(value, "//")) {
+		return nil
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+		return fmt.Errorf("privacy URL %q must be an https URL or a path that starts with /", value)
+	}
+	return nil
+}
+
+var Pages = template.Must(template.New("oauth").Funcs(template.FuncMap{"providerLabel": server.ProviderLabel}).Parse(oauthHTML))
+
+type Config struct{ ProductName, PrivacyURL, ThemeCSS string }
+type Page struct {
+	ProductName string
+	Invitation  *server.InvitationPage
+	server.BrowserAuthorization
+	AccessForm      string
+	Token           string
+	AccountName     string
+	WebLogin        bool
+	AccountArchived bool
+	Title           string
+	Style           template.CSS
+	Script          template.JS
+	Device          bool
+	Failed          bool
+	Message         string
+	Retry           string
+	RetryLabel      string
+	// Action is the form target when the page URL is not the next step, for
+	// example after a provider callback.
+	Action string
+	// Provider is the safe provider name of the current page.
+	Provider string
+	// Confirmation describes a pending provider confirmation.
+	Confirmation *server.ProviderConfirmationPage
+	// Fields holds field errors that the page shows next to the input.
+	Fields map[string]string
+	// PrivacyURL is the privacy notice link of the footer.
+	PrivacyURL string
+}
+
+func Render(ctx *gin.Context, status int, name string, page Page, cfg Config) {
+	// The style and script are embedded application code. CSP permits their exact hashes.
+	style := oauthStyle + cfg.ThemeCSS
+	page.Style = template.CSS(style)
+	page.ProductName = cfg.ProductName
+	if page.ProductName == "" {
+		page.ProductName = "SRE-Norns"
+	}
+	page.Script = template.JS(passwordScript)
+	page.PrivacyURL = cfg.PrivacyURL
+	scriptSum := sha256.Sum256([]byte(passwordScript))
+	sum := sha256.Sum256([]byte(style))
+	ctx.Header("Content-Security-Policy", "default-src 'none'; style-src 'sha256-"+base64.StdEncoding.EncodeToString(sum[:])+"'; script-src 'sha256-"+base64.StdEncoding.EncodeToString(scriptSum[:])+"'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+	ctx.Header("Content-Type", "text/html; charset=utf-8")
+	ctx.Header("Cache-Control", "no-store")
+	ctx.Header("Pragma", "no-cache")
+	ctx.Header("Referrer-Policy", "no-referrer")
+	ctx.Status(status)
+	_ = Pages.ExecuteTemplate(ctx.Writer, name, page)
+}
+
+// RetryFor rebuilds a restart URL from the safe outer authorization fields.
+func RetryFor(path string, form url.Values) string {
+	values := url.Values{}
+	for _, key := range []string{"client_id", "redirect_uri", "response_type", "code_challenge_method", "code_challenge", "state", "user_code", "preferred_context"} {
+		if value := form.Get(key); value != "" {
+			values.Set(key, value)
+		}
+	}
+	if len(values) == 0 {
+		return path
+	}
+	return path + "?" + values.Encode()
+}
+
+// outerAuthorization returns the safe outer authorization fields of the page.
+func (p Page) outerAuthorization() url.Values {
+	values := url.Values{}
+	if p.ClientID != "" && p.RedirectURI != "" {
+		values.Set("client_id", p.ClientID)
+		values.Set("redirect_uri", p.RedirectURI)
+		values.Set("response_type", "code")
+		values.Set("code_challenge_method", "S256")
+		values.Set("code_challenge", p.Challenge)
+		values.Set("state", p.State)
+	}
+	if p.PreferredContext != "" {
+		values.Set("preferred_context", p.PreferredContext)
+	}
+	return values
+}
+
+// OuterQuery carries the outer authorization to a linked page, such as
+// Create account, so that a later sign-in resumes the same transaction.
+func (p Page) OuterQuery() string {
+	if values := p.outerAuthorization(); values.Get("client_id") != "" {
+		return "?" + values.Encode()
+	}
+	return ""
+}
+
+// ShowProviders reports whether the page offers provider sign-in. A page that
+// already holds an authentication proof does not. A device page needs the
+// device code to bind the provider transaction.
+func (p Page) ShowProviders() bool {
+	return len(p.Providers) > 0 && p.AuthTicket == "" && (!p.Device || p.UserCode != "")
+}
+
+// ProviderLink is the same-origin start URL of a provider for this page.
+func (p Page) ProviderLink(name string) string {
+	if p.Invitation != nil {
+		return "/oauth/invitations/providers/" + url.PathEscape(name) + "/start"
+	}
+	values := p.outerAuthorization()
+	switch {
+	case p.AccessForm == "register":
+		values.Set("purpose", "register")
+	case p.Device:
+		values = url.Values{"purpose": {"device"}, "user_code": {p.UserCode}}
+	case p.WebLogin:
+		values.Set("purpose", "login")
+	default:
+		values.Set("purpose", "authorize")
+	}
+	return "/oauth/providers/" + url.PathEscape(name) + "/start?" + values.Encode()
+}

@@ -1,0 +1,9 @@
+{{define "subject"}}{{.ProductName}} sign-in attempt{{end}}{{define "body"}}Someone tried to log in to {{.ProductName}} with a {{.Provider}} account that uses this email address. No {{.ProductName}} user uses this {{.Provider}} account.
+
+To create an {{.ProductName}} account, open:
+{{.URL}}
+
+If you did not try to log in, ignore this email.
+{{if .Footer}}
+{{.Footer}}
+{{end}}{{end}}
