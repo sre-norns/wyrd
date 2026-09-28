@@ -102,13 +102,14 @@ From there:
 | [manifest](./pkg/manifest) | Kubernetes-like Custom Resource Definitions (CRD): type registry, resource metadata, labels and [label selectors](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/). |
 | [bark](./pkg/bark) | REST API building blocks for [gin-gonic](https://gin-gonic.com) that operate on manifest resources: content-type negotiation, search and pagination middleware, versioned resource handlers. |
 | [dbstore](./pkg/dbstore) | Storage and label-based search of CRD resources in relational databases. Built on [GORM](https://gorm.io/), so it supports the same [databases](https://gorm.io/docs/connecting_to_the_database.html). |
+| [idempotency](./pkg/idempotency) | The record store behind `bark.Idempotent`: safe retries by `Idempotency-Key`. |
 | [grace](./pkg/grace) | Process lifecycle: OS signal handling for graceful shutdown in Kubernetes, startup assertions, and a limited-concurrency workgroup. |
 | [webhooks](./pkg/webhooks) | Webhook resource definition and an HTTP caller to notify subscribers of resource changes. |
 
 ## Development
 
 ```sh
-make test        # go test with the race detector
+make test        # go test with the race detector; set WYRD_TEST_POSTGRES_URL to include Postgres tests
 make test/cover  # ... and open the coverage report
 make audit       # go mod verify, go vet, staticcheck and tests
 make scan-vuln   # govulncheck against the Go vulnerability database

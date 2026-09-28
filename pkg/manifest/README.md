@@ -71,6 +71,20 @@ type ResourceManifest struct {
 }
 ```
 
+## Scope
+
+Every kind has a scope: `system` (the default), `account` or `project`, declared
+when it is registered:
+
+```go
+manifest.MustRegisterManifest("scenarios", &ScenarioSpec{}, &ScenarioStatus{}, manifest.WithScope(manifest.ScopeProject))
+```
+
+A resource's scope is `metadata.account` and `metadata.project`. They are
+server-owned: `ObjectMeta.ApplyScope(ref)` fills them from the request and refuses
+(`ErrScopeMismatch`) a body that names another scope. `ScopeRef.Validate(scope)`
+checks a reference fits a kind.
+
 ## Labels
 To make working with CRD-like resources easier, the package also includes helper functions to work with `Labels`. Any resource can have arbitrary (from CRD perspective) collection of "key-value" pairs attached to it. The package provides a definition of `LabelSelector` to ease implementation of resource that depends of other key-value labeled resources.
 

@@ -97,6 +97,44 @@ To support the above query parameters, following code should be added to the han
     })
 ```
 
+### Middleware: `SearchableAPIWithLimits`
+`SearchableAPI(n)` uses `n` as both the default page size and the cap.
+`SearchableAPIWithLimits(bark.DefaultPageLimits)` sets them apart (100 and 1024)
+and also accepts `offset`, `limit`, `cursor` and `fields`; `page`/`pageSize`
+remain aliases, and `offset`/`limit` win when both are given.
+
+Reply with a page in the `{items, limit, next, total}` shape:
+
+```go
+    api.GET("/scenarios", bark.SearchableAPIWithLimits(bark.DefaultPageLimits), func(ctx *gin.Context) {
+        var items []Scenario
+        page, err := store.FindPage(ctx, &items, bark.RequireSearchQuery(ctx))
+        bark.WithContext[Scenario](ctx).Page(items, page, err)
+    })
+```
+
+### Errors: `AbortWithProblem`
+Renders any error as `application/problem+json` (RFC 9457) with a stable `code`.
+Errors declared as `manifest.StatusError` -- wyrd's own sentinels are -- carry
+their status and code; anything else uses the fallback status.
+
+### Middleware: `RequireIfMatch`
+Requires `If-Match` on `PUT`, `PATCH` and `DELETE` (428 when missing). The handler
+reads the version with `IfMatchVersion(ctx)` and passes it to the store's version
+guard. `Found` responses carry `ETag: "<version>"`.
+
+### Middleware: `Idempotent`
+Makes `POST` safe to retry with an `Idempotency-Key` header: the key is reserved
+before the handler runs, the outcome is replayed to retries, and a key reused for
+a different request is refused. See its doc comment for what it does not promise.
+
+```go
+    api.Use(bark.Idempotent(dbstore.NewIdempotencyStore(db, time.Minute), bark.IdempotencyOptions{
+        Required: true,
+        Scope:    func(ctx *gin.Context) string { return principalID(ctx) },
+    }))
+```
+
 ### Middleware: `AuthBearerAPI`
 
 `AuthBearerAPI` extracts syntactically valid RFC 6750 Bearer credentials and
