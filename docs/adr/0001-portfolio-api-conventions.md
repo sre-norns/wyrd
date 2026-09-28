@@ -1,6 +1,6 @@
 # ADR 0001: One resource API convention for SRE-Norns products
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-09-28)
 - **Date:** 2026-09-28
 - **Applies to:** wyrd (`manifest`, `bark`, `dbstore`), Urth, Exp-Bench. Comserv is
   affected only through wyrd and must keep building unchanged.
