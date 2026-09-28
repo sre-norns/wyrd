@@ -20,6 +20,26 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Selector semantics in SQL, and the store properties built on them, are
+    # tested against a real Postgres. Those tests skip without
+    # WYRD_TEST_POSTGRES_URL, so CI provides one; each test works in a private
+    # schema of its own.
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: wyrd
+          POSTGRES_PASSWORD: wyrd
+          POSTGRES_DB: wyrd
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      WYRD_TEST_POSTGRES_URL: postgres://wyrd:wyrd@localhost:5432/wyrd?sslmode=disable
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:

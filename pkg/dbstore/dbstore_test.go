@@ -461,9 +461,13 @@ func TestDBStore_Find(t *testing.T) {
 					mockRequirement(t, "env", manifest.NotIn, "xyz", "natural"),
 				),
 			},
-			expectTotal: 2,
+			// pet-3 has no env label, and notin admits a resource without the
+			// key -- as Requirement.Matches does. This case used to expect
+			// only pet-2 and pet-5, which encoded the SQL disagreeing with it.
+			expectTotal: 3,
 			expect: []Pet{
 				makePet("pet-2", "some"),
+				makePet("pet-3", "value"),
 				makePet("pet-5", "another"),
 			},
 		},
