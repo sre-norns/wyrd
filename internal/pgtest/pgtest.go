@@ -2,7 +2,7 @@
 //
 // Several store properties -- selector semantics in SQL, scoped uniqueness,
 // row visibility -- are properties of a real Postgres, not of SQLite, so they are
-// tested against one. The server comes from WYRD_TEST_POSTGRES_URL; a test that
+// tested against one. Postgres 18 is the supported version; CI runs it. The server comes from WYRD_TEST_POSTGRES_URL; a test that
 // needs it skips when the variable is unset, and fails when it is set but the
 // server cannot be reached, so a misconfigured CI cannot pass by skipping.
 //
