@@ -1,0 +1,493 @@
+package httpapi
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"net/url"
+	"reflect"
+	"strconv"
+	"strings"
+
+	"github.com/sre-norns/wyrd/pkg/manifest"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	server "github.com/sre-norns/wyrd/identity"
+	expbench "github.com/sre-norns/wyrd/identity/model"
+	"github.com/sre-norns/wyrd/pkg/bark"
+)
+
+func writeProblem(ctx *gin.Context, err error) {
+	p := &server.Problem{Status: 500, Code: "internal-error", Detail: "The service cannot complete the request."}
+	var domain *server.Problem
+	if errors.As(err, &domain) {
+		copy := *domain
+		p = &copy
+	}
+	if p.Status == 0 {
+		p.Status = 500
+	}
+	if p.Type == "" {
+		p.Type = "urn:exp-bench:problem:" + p.Code
+	}
+	p.Title = http.StatusText(p.Status)
+	if p.Status == 429 {
+		ctx.Header("Retry-After", "60")
+	}
+	p.Instance = ctx.Request.URL.Path
+	p.RequestID = ctx.GetString("requestID")
+	ctx.Header("Content-Type", "application/problem+json")
+	ctx.AbortWithStatusJSON(p.Status, p)
+}
+
+type resourceResponse[T any] struct{ ctx *gin.Context }
+
+func response[T any](ctx *gin.Context) *resourceResponse[T] { return &resourceResponse[T]{ctx} }
+func (r *resourceResponse[T]) send(status int, v T) {
+	if m, ok := any(&v).(interface{ Metadata() *expbench.Resource }); ok {
+		meta := m.Metadata()
+		r.ctx.Header("ETag", server.ETag(meta.Revision))
+		if status == 201 && meta.ID != "" {
+			name := reflect.TypeOf(v).Name()
+			path := resourcePaths[name]
+			if path != "" {
+				r.ctx.Header("Location", "/v1/"+path+"/"+meta.ID)
+			}
+		}
+	}
+	if m, ok := any(&v).(interface {
+		SystemMetadata() *expbench.SystemRecord
+	}); ok {
+		r.ctx.Header("ETag", server.ETag(m.SystemMetadata().Revision))
+	}
+	r.ctx.JSON(status, v)
+}
+func (r *resourceResponse[T]) Found(v T, found bool, err error) {
+	if err != nil {
+		writeProblem(r.ctx, err)
+		return
+	}
+	if !found {
+		writeProblem(r.ctx, &server.Problem{Status: 404, Code: "not-found", Detail: "Resource not found."})
+		return
+	}
+	r.send(200, v)
+}
+func (r *resourceResponse[T]) Created(v T, err error) {
+	if err != nil {
+		writeProblem(r.ctx, err)
+		return
+	}
+	r.send(201, v)
+}
+func (r *resourceResponse[T]) CreatedOrUpdated(v T, created bool, err error) {
+	if err != nil {
+		writeProblem(r.ctx, err)
+		return
+	}
+
+	status := 200
+	if created {
+		status = 201
+	}
+	r.send(status, v)
+}
+func (r *resourceResponse[T]) List(items []T, total int64, err error) {
+	if err != nil {
+		writeProblem(r.ctx, err)
+		return
+	}
+	if items == nil {
+		items = []T{}
+	}
+	q := requireSearchQuery(r.ctx)
+	r.ctx.JSON(200, gin.H{"items": items, "total": total, "offset": q.Offset, "limit": q.Limit})
+}
+
+var resourcePaths = map[string]string{"Account": "accounts", "AccountMembership": "account-memberships", "AccountInvitation": "account-invitations", "AgentIdentity": "agent-identities", "AgentIdentityToken": "agent-identity-tokens", "Project": "projects", "ProjectMembership": "project-memberships", "AgentAuthorization": "agent-authorizations", "Session": "sessions"}
+
+func ResourceValueAPI[T any]() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		var value T
+		body, err := io.ReadAll(io.LimitReader(ctx.Request.Body, 1048577))
+		if err != nil || len(body) > 1048576 {
+			writeProblem(ctx, &server.Problem{Status: 413, Code: "body-too-large", Detail: "The request exceeds 1 MiB."})
+			return
+		}
+		var fields map[string]json.RawMessage
+		if ctx.Request.Method == http.MethodPatch {
+			if err := json.Unmarshal(body, &fields); err != nil {
+				writeProblem(ctx, &server.Problem{Status: 400, Code: "invalid-json", Detail: "Invalid JSON body."})
+				return
+			}
+		}
+		d := json.NewDecoder(bytes.NewReader(body))
+		d.DisallowUnknownFields()
+		if err = d.Decode(&value); err != nil {
+			writeProblem(ctx, &server.Problem{Status: 400, Code: "invalid-json", Detail: err.Error()})
+			return
+		}
+		if d.Decode(new(any)) != io.EOF {
+			writeProblem(ctx, &server.Problem{Status: 400, Code: "invalid-json", Detail: "Only one JSON value is permitted."})
+			return
+		}
+		if _, ok := any(value).(expbench.AccountInvitation); ok && ctx.Request.Method == http.MethodPost {
+			var supplied map[string]json.RawMessage
+			_ = json.Unmarshal(body, &supplied)
+			for _, field := range []string{"token", "email_delivery", "accepted_by", "membership_id", "generation"} {
+				if _, exists := supplied[field]; exists {
+					writeProblem(ctx, &server.Problem{Status: 422, Code: "validation", Detail: "Invitation result fields are read-only."})
+					return
+				}
+			}
+		}
+		if i, ok := any(value).(expbench.AccountInvitation); ok && ctx.Request.Method == http.MethodPost {
+			// Legacy Go clients serialize zero-valued resource metadata. Preserve it.
+			if !i.ExpiresAt.IsZero() || i.Status != "" || i.Revision != 0 || !i.CreatedAt.IsZero() || !i.UpdatedAt.IsZero() || !reflect.ValueOf(i.Actor).IsZero() {
+				writeProblem(ctx, &server.Problem{Status: 422, Code: "validation", Detail: "Invitation result fields are read-only."})
+				return
+			}
+		}
+		if agent, ok := any(value).(expbench.AgentIdentity); ok && agent.LastSeenAt != nil {
+			writeProblem(ctx, &server.Problem{Status: 422, Code: "validation", Detail: "Last seen time is read-only."})
+			return
+		}
+		if m, ok := any(&value).(interface{ Metadata() *expbench.Resource }); ok {
+			meta := m.Metadata()
+			if ctx.Request.Method == http.MethodPost && meta.ID != "" {
+				writeProblem(ctx, &server.Problem{Status: 422, Code: "validation", Detail: "The server assigns resource identifiers."})
+				return
+			}
+			if ctx.Request.Method == http.MethodPatch {
+				if meta.ID != "" && meta.ID != ctx.Param("id") {
+					writeProblem(ctx, &server.Problem{Status: 422, Code: "validation", Detail: "Path and body identifiers differ."})
+					return
+				}
+				delete(fields, "id")
+				meta.ID = ctx.Param("id")
+			}
+			if _, ok := any(value).(expbench.Project); ok && ctx.Request.Method == http.MethodPost {
+				if meta.AccountID != "" && string(meta.AccountID) != ctx.Param("id") {
+					writeProblem(ctx, &server.Problem{Status: 422, Code: "validation", Detail: "Path and body ownership differ."})
+					return
+				}
+				meta.AccountID = expbench.AccountID(ctx.Param("id"))
+			}
+		}
+		req := server.Request{ID: ctx.GetString("requestID"), Method: ctx.Request.Method, Target: ctx.Request.URL.Path, IfMatch: ctx.GetHeader("If-Match"), Patch: fields, InvitationToken: ctx.GetHeader("X-Invitation-Token")}
+		req.SupportReason, req.SupportReference = supportAuditFields(body)
+		ctx.Request = ctx.Request.WithContext(server.WithRequest(ctx.Request.Context(), req))
+		ctx.Set(resourceValueKey, value)
+		ctx.Next()
+	}
+}
+
+type capturedWriter struct {
+	gin.ResponseWriter
+	body    bytes.Buffer
+	status  int
+	headers http.Header
+}
+
+func (w *capturedWriter) Header() http.Header    { return w.headers }
+func (w *capturedWriter) WriteHeader(status int) { w.status = status }
+func (w *capturedWriter) WriteHeaderNow() {
+	if w.status == 0 {
+		w.status = 200
+	}
+}
+func (w *capturedWriter) Write(b []byte) (int, error)       { w.WriteHeaderNow(); return w.body.Write(b) }
+func (w *capturedWriter) WriteString(s string) (int, error) { return w.Write([]byte(s)) }
+func (w *capturedWriter) Status() int {
+	if w.status == 0 {
+		return 200
+	}
+	return w.status
+}
+func (w *capturedWriter) Size() int     { return w.body.Len() }
+func (w *capturedWriter) Written() bool { return w.status != 0 || w.body.Len() > 0 }
+func authenticated(s *server.Service) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		id := uuid.NewString()
+		ctx.Set("requestID", id)
+		ctx.Header("X-Request-ID", id)
+		token, ok := strings.CutPrefix(ctx.GetHeader("Authorization"), "Bearer ")
+		if !ok {
+			writeProblem(ctx, &server.Problem{Status: 401, Code: "unauthenticated", Detail: "A bearer credential is required."})
+			return
+		}
+		p, err := s.Authenticate(ctx.Request.Context(), token)
+		if err != nil {
+			writeProblem(ctx, err)
+			return
+		}
+		req := server.Request{Sort: ctx.Query("sort"), Direction: ctx.Query("direction"), ID: id, Method: ctx.Request.Method, Target: ctx.Request.URL.Path, IfMatch: ctx.GetHeader("If-Match"), InvitationToken: ctx.GetHeader("X-Invitation-Token")}
+		ctx.Request = ctx.Request.WithContext(server.WithPrincipal(s.RequestContext(ctx.Request.Context(), req), p))
+		if err := s.AuthorizeRoute(ctx.Request.Context(), ctx.Request.URL.Path); err != nil {
+			if auditErr := s.AuditRejected(ctx.Request.Context(), err); auditErr != nil {
+				err = auditErr
+			}
+			writeProblem(ctx, err)
+			return
+		}
+		if err := s.AllowRequest(ctx.Request.Context()); err != nil {
+			if auditErr := s.AuditRejected(ctx.Request.Context(), err); auditErr != nil {
+				err = auditErr
+			}
+			writeProblem(ctx, err)
+			return
+		}
+		if ctx.Request.Method == http.MethodGet {
+			ctx.Next()
+			return
+		}
+		body, err := io.ReadAll(io.LimitReader(ctx.Request.Body, 1048577))
+		if err != nil || len(body) > 1048576 {
+			writeProblem(ctx, &server.Problem{Status: 413, Code: "body-too-large", Detail: "The request exceeds 1 MiB."})
+			return
+		}
+		req.SupportReason, req.SupportReference = supportAuditFields(body)
+		ctx.Request = ctx.Request.WithContext(server.WithRequest(ctx.Request.Context(), req))
+		ctx.Request.Body = io.NopCloser(bytes.NewReader(body))
+		normalized := body
+		var parsed any
+		if json.Unmarshal(body, &parsed) == nil {
+			normalized, _ = json.Marshal(parsed)
+		}
+		real := ctx.Writer
+		out, err := s.TransactHTTP(ctx.Request.Context(), token, ctx.GetHeader("Idempotency-Key"), string(normalized), func(tx context.Context) server.HTTPOutcome {
+			capture := &capturedWriter{ResponseWriter: real, headers: real.Header().Clone()}
+			ctx.Writer = capture
+			ctx.Request = ctx.Request.WithContext(tx)
+			ctx.Next()
+			return server.HTTPOutcome{Status: capture.Status(), Body: capture.body.Bytes(), Header: capture.headers}
+		})
+		ctx.Writer = real
+		if err != nil {
+			writeProblem(ctx, err)
+			return
+		}
+		for k, vs := range out.Header {
+			real.Header()[k] = vs
+		}
+		if out.Status >= 400 {
+			var failure server.Problem
+			_ = json.Unmarshal(out.Body, &failure)
+			if err := s.AuditRejected(server.WithPrincipal(s.RequestContext(context.Background(), req), p), &failure); err != nil {
+				writeProblem(ctx, err)
+				return
+			}
+		}
+		ctx.Data(out.Status, out.Header.Get("Content-Type"), out.Body)
+		ctx.Abort()
+	}
+}
+
+func oauthResponse(ctx *gin.Context, result any, err error) {
+	ctx.Header("Cache-Control", "no-store")
+	ctx.Header("Pragma", "no-cache")
+	if err != nil {
+		var p *server.Problem
+		if errors.As(err, &p) {
+			ctx.JSON(p.Status, gin.H{"error": p.Code, "error_description": p.Detail})
+		} else {
+			ctx.JSON(500, gin.H{"error": "server_error"})
+		}
+		return
+	}
+	switch v := result.(type) {
+	case server.BrowserAuthorization:
+		renderOAuthPage(ctx, 200, "login", oauthPage{BrowserAuthorization: v, Title: "Authorize access", Device: ctx.Request.URL.Path == "/oauth/device" || v.UserCode != ""})
+	case server.AuthorizationRedirect:
+		ctx.Redirect(302, v.URL)
+	default:
+		ctx.JSON(200, result)
+	}
+}
+func browserApproval(s *server.Service) gin.HandlerFunc {
+	return browserAuthorization(s, false)
+}
+
+func browserLogin(s *server.Service) gin.HandlerFunc {
+	return browserAuthorization(s, true)
+}
+
+func browserAuthorization(s *server.Service, webLogin bool) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		if err := ctx.Request.ParseForm(); err != nil {
+			oauthResponse(ctx, nil, err)
+			return
+		}
+		if webLogin && (ctx.Request.Form.Get("client_id") != s.WebClientID() || ctx.Request.Form.Get("user_code") != "") {
+			renderOAuthPage(ctx, http.StatusBadRequest, "complete", oauthPage{WebLogin: true, RetryLabel: "Back to login", Title: "Login unavailable", Message: "Start sign-in from the web application.", Failed: true, Retry: "/sign-in"})
+			return
+		}
+		if ctx.Request.Method == http.MethodGet {
+			ctx.Request.Form.Del("password")
+			ctx.Request.Form.Del("email")
+		}
+		authorizeBrowser(ctx, s, webLogin, ctx.Request.URL.Path == "/oauth/device", ctx.Request.Form, "")
+	}
+}
+
+// authorizeBrowser runs one browser authorization step and renders the result.
+// A provider callback resumes the flow here with an internal authentication
+// proof; action then names the page that the next form posts to.
+func authorizeBrowser(ctx *gin.Context, s *server.Service, webLogin, device bool, form url.Values, action string) {
+	if webLogin {
+		form.Set("decision", "approve")
+	}
+	result, err := s.OAuth().Authorize(s.RequestContext(ctx.Request.Context(), server.Request{OAuthQuery: form, DeviceFlow: device}))
+	if err != nil {
+		status := http.StatusInternalServerError
+		message := "The service cannot complete authorization. Try again."
+		var problem *server.Problem
+		if errors.As(err, &problem) {
+			status = problem.Status
+			message = problem.Detail
+		}
+		if webLogin {
+			// Validate the transaction again without credentials before redisplaying it.
+			retryForm := url.Values{}
+			for key, values := range form {
+				retryForm[key] = append([]string(nil), values...)
+			}
+			for _, key := range []string{"password", "email", "auth_ticket"} {
+				retryForm.Del(key)
+			}
+			retry, retryErr := s.OAuth().Authorize(s.RequestContext(ctx.Request.Context(), server.Request{OAuthQuery: retryForm}))
+			if page, ok := retry.(server.BrowserAuthorization); retryErr == nil && ok {
+				page.Email = form.Get("email")
+				if problem != nil && problem.Code == "access_denied" {
+					message = "Login failed. Check your email and password, and confirm that you have access to this workspace."
+					if form.Get("auth_ticket") != "" {
+						message = "Login failed. Confirm that your user is active and has access to a workspace, then sign in again."
+					}
+				}
+				renderOAuthPage(ctx, status, "web-login", oauthPage{BrowserAuthorization: page, Title: "Log in", WebLogin: true, Failed: true, Message: message})
+				return
+			}
+		}
+		if device && problem != nil && (problem.Code == "invalid_grant" || problem.Code == "expired_token") {
+			message = "The device request expired or is complete. Run expbctl auth again."
+		}
+		renderOAuthPage(ctx, status, "complete", oauthPage{WebLogin: webLogin, Title: "Authorization could not complete", Message: message, Failed: true, Retry: oauthRetryFor(authorizationPath(webLogin, device), form)})
+		return
+	}
+	if result, ok := result.(map[string]string); ok && result["status"] == "approved" {
+		page := oauthPage{Title: "Experience the progress", Message: "You can now close the window. Return to your terminal to continue."}
+		if form.Get("decision") == "deny" {
+			page.Title = "Access denied"
+			page.Message = "The application has no access. You can now close the window."
+			page.Failed = true
+		}
+		renderOAuthPage(ctx, 200, "complete", page)
+		return
+	}
+	if page, ok := result.(server.BrowserAuthorization); ok {
+		if webLogin {
+			renderOAuthPage(ctx, 200, "web-login", oauthPage{BrowserAuthorization: page, Title: "Log in", WebLogin: true, AccountArchived: form.Get("notice") == "account-archived", Action: action})
+			return
+		}
+		renderOAuthPage(ctx, 200, "login", oauthPage{BrowserAuthorization: page, Title: "Authorize access", Device: device || page.UserCode != "", Action: action})
+		return
+	}
+	oauthResponse(ctx, result, nil)
+}
+
+func authorizationPath(webLogin, device bool) string {
+	switch {
+	case webLogin:
+		return "/oauth/login"
+	case device:
+		return "/oauth/device"
+	}
+	return "/oauth/authorize"
+}
+
+// searchable retains Bark page parameters and adds direct offset and limit.
+func searchable() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		var params bark.SearchParams
+		if err := ctx.ShouldBindQuery(&params); err != nil {
+			writeProblem(ctx, &server.Problem{Status: 400, Code: "invalid-query", Detail: err.Error()})
+			return
+		}
+		if params.PageSize == 0 {
+			params.PageSize = 100
+		}
+		if params.PageSize > paginationLimit {
+			params.PageSize = paginationLimit
+		}
+		query, err := params.BuildQuery(100)
+		if err != nil {
+			writeProblem(ctx, &server.Problem{Status: 400, Code: "invalid-query", Detail: err.Error()})
+			return
+		}
+		for name, dest := range map[string]*uint{"offset": &query.Offset, "limit": &query.Limit} {
+			if raw, ok := ctx.GetQuery(name); ok {
+				n, err := strconv.ParseUint(raw, 10, 63)
+				if err != nil {
+					writeProblem(ctx, &server.Problem{Status: 400, Code: "invalid-query", Detail: "Invalid " + name + "."})
+					return
+				}
+				*dest = uint(n)
+			}
+		}
+		if query.Limit == 0 {
+			query.Limit = 100
+		}
+		if query.Limit > paginationLimit {
+			query.Limit = paginationLimit
+		}
+		ctx.Set("serviceSearchQuery", query)
+		ctx.Next()
+	}
+}
+func requireSearchQuery(ctx *gin.Context) manifest.SearchQuery {
+	return ctx.MustGet("serviceSearchQuery").(manifest.SearchQuery)
+}
+
+func authenticationRate(s *server.Service) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		if strings.HasPrefix(ctx.Request.URL.Path, "/oauth/") {
+			// no-referrer pages can send a null Origin. Fetch Metadata still
+			// identifies same-origin browser submissions without exposing link tokens.
+			sameOriginForm := ctx.GetHeader("Origin") == "null" && ctx.GetHeader("Sec-Fetch-Site") == "same-origin"
+			if ctx.Request.Method == http.MethodPost && !s.AuthenticationOriginAllowed(ctx.GetHeader("Origin")) && !sameOriginForm {
+				renderOAuthPage(ctx, 403, "complete", oauthPage{Title: "Request blocked", Message: "Start this request from Exp-Bench.", Failed: true, Retry: "/sign-in"})
+				ctx.Abort()
+				return
+			}
+			if err := s.AllowAuthentication(ctx.Request.Context(), ctx.ClientIP()); err != nil {
+				oauthResponse(ctx, nil, err)
+				ctx.Abort()
+				return
+			}
+			ctx.Request.Body = http.MaxBytesReader(ctx.Writer, ctx.Request.Body, 16384)
+		}
+		ctx.Next()
+	}
+}
+
+// Record only bounded support fields. Never copy mutation payloads into system audit.
+func supportAuditFields(body []byte) (string, string) {
+	var fields struct {
+		Reason    string `json:"reason"`
+		Reference string `json:"reference"`
+	}
+	if json.Unmarshal(body, &fields) != nil {
+		return "", ""
+	}
+	if len(fields.Reason) > 2000 {
+		fields.Reason = ""
+	}
+	if len(fields.Reference) > 500 {
+		fields.Reference = ""
+	}
+	return fields.Reason, fields.Reference
+}

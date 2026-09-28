@@ -1,0 +1,476 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color: #dfe2ee;
+  background: #0f131c;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+  /* Transparent so the .glow layer below shows through; :root paints the base. */
+  background: transparent;
+}
+/* The corner light. A decorative, non-interactive layer behind the page so it
+   can be animated on its own (opacity/transform/filter) without touching the
+   document background. At rest it matches the original static glow. */
+.glow {
+  position: fixed;
+  /* Oversized to 200% of the viewport so transforms (drift, orbit) never swing
+     the layer's own edges into view. The light rides the viewport's top-left
+     corner, which sits 25% into this box (a 50% margin on each side). */
+  inset: -50%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 46% 36% at 25% 25%, #18343d 0, transparent 58%);
+  transform-origin: 25% 25%;
+  will-change: opacity, transform, filter;
+}
+/* Living-light sequences. Each class plays once, then JS removes it and the
+   light returns to its resting state. Amplitudes stay small (mostly subtle). */
+.glow.glow-breathe {
+  animation: glow-breathe 6s ease-in-out both;
+}
+.glow.glow-drift {
+  animation: glow-drift 9s ease-in-out both;
+}
+.glow.glow-blink {
+  animation: glow-blink 1.2s ease-in-out both;
+}
+.glow.glow-flicker {
+  animation: glow-flicker 2.6s steps(1, end) both;
+}
+.glow.glow-sweep {
+  /* Orbit about the viewport centre (the middle of this 200% box). */
+  transform-origin: 50% 50%;
+  animation: glow-sweep 16s cubic-bezier(0.45, 0, 0.55, 1) both;
+}
+.glow.glow-abort {
+  transform-origin: 50% 50%;
+  animation: glow-abort 13s both;
+}
+/* Swell out from the corner so the light reaches toward and lifts the form. */
+@keyframes glow-breathe {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.5);
+    filter: brightness(1.55);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+@keyframes glow-drift {
+  0% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(3%, 2.4%);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+@keyframes glow-blink {
+  0% {
+    filter: brightness(1);
+  }
+  22% {
+    filter: brightness(0.55);
+  }
+  40% {
+    filter: brightness(1.1);
+  }
+  62% {
+    filter: brightness(0.7);
+  }
+  100% {
+    filter: brightness(1);
+  }
+}
+/* Old, failing bulb: a warm-up ramp, then an irregular flicker burst, settle. */
+@keyframes glow-flicker {
+  0% {
+    filter: brightness(1);
+  }
+  14% {
+    filter: brightness(1.5);
+  }
+  20% {
+    filter: brightness(0.35);
+  }
+  24% {
+    filter: brightness(1.6);
+  }
+  30% {
+    filter: brightness(0.5);
+  }
+  33% {
+    filter: brightness(1.55);
+  }
+  38% {
+    filter: brightness(0.2);
+  }
+  44% {
+    filter: brightness(1.4);
+  }
+  48% {
+    filter: brightness(0.6);
+  }
+  55% {
+    filter: brightness(1.5);
+  }
+  60% {
+    filter: brightness(0.4);
+  }
+  68% {
+    filter: brightness(1.3);
+  }
+  100% {
+    filter: brightness(1);
+  }
+}
+/* A full clockwise orbit: the light travels top-left → top-right → bottom-right
+   → bottom-left and back, easing slow-quick-slow across the loop. */
+@keyframes glow-sweep {
+  0% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(180deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+/* An aborted experiment: commit clockwise to the lower-right corner, hesitate,
+   then retrace counter-clockwise all the way back to the top-left baseline. */
+@keyframes glow-abort {
+  0% {
+    transform: rotate(0deg);
+    animation-timing-function: cubic-bezier(0.35, 0, 0.65, 0.9);
+  }
+  45% {
+    transform: rotate(180deg);
+  }
+  57% {
+    transform: rotate(180deg);
+    animation-timing-function: cubic-bezier(0.35, 0.1, 0.4, 1);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .glow {
+    animation: none !important;
+  }
+}
+/* Living headline: the hero title crossfades between playful variants. JS adds
+   .headline-swap to fade it out, swaps the words, then removes it to fade in. */
+.layout aside h1 {
+  transition:
+    opacity 0.25s ease,
+    filter 0.35s ease;
+}
+.layout aside h1.headline-swap {
+  opacity: 0;
+  filter: blur(5px);
+}
+main {
+  width: min(100%, 940px);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin-bottom: 32px;
+}
+.mark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid #00dbe9;
+  border-radius: 8px;
+  color: #00f0ff;
+  font-size: 26px;
+}
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: 64px;
+  align-items: center;
+}
+.eyebrow {
+  color: #00dbe9;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 12px;
+  font-weight: 600;
+}
+h1 {
+  font-size: clamp(32px, 4vw, 44px);
+  line-height: 1.12;
+  letter-spacing: -1.5px;
+  margin: 16px 0 24px;
+}
+h2 {
+  font-size: 22px;
+  margin: 0 0 8px;
+  letter-spacing: -0.5px;
+}
+p {
+  line-height: 1.6;
+  color: #b9cacb;
+}
+aside p {
+  max-width: 340px;
+}
+.client {
+  padding: 16px 0;
+  margin-top: 28px;
+  border-top: 1px solid #3b494b;
+}
+.client strong {
+  display: block;
+  color: #dfe2ee;
+  font-family: ui-monospace, monospace;
+  overflow-wrap: anywhere;
+  margin-top: 6px;
+}
+.card {
+  padding: 32px;
+  background: #1c2028;
+  border: 1px solid #3b494b;
+  border-radius: 12px;
+  box-shadow: 0 24px 80px #0004;
+}
+label {
+  display: block;
+  margin-top: 20px;
+  font-size: 14px;
+  font-weight: 600;
+}
+input,
+select {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid #617071;
+  border-radius: 6px;
+  background: #0f131c;
+  color: #dfe2ee;
+  font: inherit;
+  min-height: 46px;
+}
+input:focus,
+select:focus,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #00f0ff;
+  outline-offset: 3px;
+}
+small {
+  display: block;
+  color: #b9cacb;
+  line-height: 1.5;
+  font-size: 13px;
+  font-weight: 400;
+  margin-top: 8px;
+}
+.actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 28px;
+}
+button,
+.button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 46px;
+  padding: 12px 18px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid #00f0ff;
+  border-radius: 6px;
+  color: #002022;
+  background: #00f0ff;
+  cursor: pointer;
+  text-decoration: none;
+}
+.secondary {
+  background: transparent;
+  border-color: #849495;
+  color: #dfe2ee;
+}
+.footer {
+  margin-top: 24px;
+  font-size: 12px;
+  color: #b9cacb;
+}
+.completion {
+  max-width: 560px;
+  margin: auto;
+  text-align: center;
+}
+.completion h1 {
+  font-size: 36px;
+}
+.result-mark {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #153b31;
+  color: #6ffbbe;
+  font-size: 32px;
+  margin: 8px auto 24px;
+}
+.error-mark {
+  background: #472823;
+  color: #ffb4ab;
+}
+.completion .actions {
+  justify-content: center;
+}
+@media (max-width: 700px) {
+  body {
+    padding: 24px 16px;
+  }
+  .brand {
+    margin-bottom: 24px;
+  }
+  .layout {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .layout h1 {
+    margin-bottom: 12px;
+  }
+  .client {
+    margin-top: 16px;
+    padding-bottom: 0;
+  }
+  .card {
+    padding: 24px;
+  }
+  .layout aside p {
+    max-width: none;
+  }
+  .layout aside .description {
+    display: none;
+  }
+  .actions button {
+    flex: 1;
+  }
+  .footer {
+    text-align: center;
+  }
+}
+
+.login-submit {
+  width: 100%;
+}
+.form-error {
+  color: #ffb4ab;
+}
+.login-help {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+.login-help a {
+  color: #00dbe9;
+  cursor: pointer;
+  font-size: 14px;
+  min-height: 24px;
+}
+.login-help a:focus-visible {
+  outline: 2px solid #00f0ff;
+  outline-offset: 3px;
+}
+.login-help p {
+  font-size: 14px;
+  margin-bottom: 0;
+}
+
+.card {
+  overflow-wrap: anywhere;
+}
+
+.password-field {
+  position: relative;
+}
+.password-field input {
+  padding-right: 52px;
+}
+.password-toggle {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #b9cacb;
+}
+.password-toggle:hover,
+.password-toggle[aria-pressed='true'] {
+  color: #00f0ff;
+  background: #262a33;
+}
+
+.providers {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}
+.provider {
+  width: 100%;
+}
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 24px 0 0;
+  color: #b9cacb;
+  font-size: 13px;
+}
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid #3b494b;
+}
+.device-code {
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.08em;
+  overflow-wrap: anywhere;
+}

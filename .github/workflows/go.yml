@@ -50,3 +50,7 @@ jobs:
 
     - name: Audit and Test
       run: make audit
+
+    - name: Audit identity module
+      working-directory: identity
+      run: make audit

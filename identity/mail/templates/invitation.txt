@@ -1,0 +1,14 @@
+{{define "subject"}}Invitation to join an {{.ProductName}} account{{end}}{{define "body"}}{{.Inviter}} invites you to join {{.Account}} on {{.ProductName}}.
+
+Invited role: {{.Role}}
+Expires: {{.Expires}}
+
+Review invitation:
+{{.URL}}
+
+Joining does not change your other account memberships. If you already use {{.ProductName}}, log in with your existing password. Otherwise, set a password to join this account.
+
+Only the latest issued invitation link works. Opening this link does not accept the invitation. If you did not expect this invitation, ignore this email.
+{{if .Footer}}
+{{.Footer}}
+{{end}}{{end}}

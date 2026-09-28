@@ -134,3 +134,11 @@ It was moved into a stand-alone module out of the project [Urth](https://github.
 ## License
 
 [Apache License, Version 2.0](./LICENSE)
+
+## Identity module
+
+[Identity and tenancy](identity/README.md) is an independent nested Go module,
+`github.com/sre-norns/wyrd/identity`. It contains the identity implementation
+extracted from Exp-Bench. Root-module consumers do not inherit its OAuth and mail
+dependencies. Its releases use `identity/v*` tags. The extracted module retains
+its source license; see [identity/LICENSE](identity/LICENSE).
