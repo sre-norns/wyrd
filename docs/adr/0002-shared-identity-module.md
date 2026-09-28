@@ -1,6 +1,6 @@
 # ADR 0002: Identity and tenancy as a shared module, extracted from Exp-Bench
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-09-28)
 - **Date:** 2026-09-28
 - **Depends on:** [ADR 0001](./0001-portfolio-api-conventions.md)
 
