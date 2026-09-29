@@ -10,7 +10,6 @@ import (
 )
 
 const (
-	paginationLimit = 1024
 
 	resourceValueKey = "resourceValueKey"
 

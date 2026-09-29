@@ -13,7 +13,7 @@ type projectMembershipsService struct {
 	db     *gorm.DB
 }
 
-func (p *projectMembershipsService) List(ctx context.Context, projectID expbench.ProjectID, query manifest.SearchQuery) (result []expbench.ProjectMembership, total int64, err error) {
+func (p *projectMembershipsService) List(ctx context.Context, projectID expbench.ProjectID, query manifest.SearchQuery) (result []expbench.ProjectMembership, page manifest.Page, err error) {
 	return list[expbench.ProjectMembership](ctx, p.db, query, "project_id = ?", projectID)
 }
 

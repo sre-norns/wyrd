@@ -19,6 +19,7 @@ import (
 
 	"github.com/google/uuid"
 	e "github.com/sre-norns/wyrd/identity/model"
+	"github.com/sre-norns/wyrd/pkg/dbstore"
 	"github.com/sre-norns/wyrd/pkg/manifest"
 	"gorm.io/gorm"
 )
@@ -248,7 +249,10 @@ func get[T any](ctx context.Context, db *gorm.DB, id string) (v T, found bool, e
 	return v, err == nil, err
 }
 
-func list[T any](ctx context.Context, db *gorm.DB, q manifest.SearchQuery, where string, args ...any) ([]T, int64, error) {
+// listQuery is the authorised, filtered query behind a list: every row it
+// selects may be shown to the caller. Paging is applied on top of it and can
+// only narrow it.
+func listQuery[T any](ctx context.Context, db *gorm.DB, q manifest.SearchQuery, where string, args ...any) (*gorm.DB, error) {
 	db = database(ctx, db)
 	var model T
 	if len(args) > 0 {
@@ -257,12 +261,12 @@ func list[T any](ctx context.Context, db *gorm.DB, q manifest.SearchQuery, where
 		case "project_id = ?":
 			project, err := load[e.Project](db, id)
 			if err != nil {
-				return nil, 0, err
+				return nil, err
 			}
 			metadata(&model).AccountID = project.AccountID
 			metadata(&model).ProjectID = e.ProjectID(id)
 			if err = authorize(ctx, db, &model, false); err != nil {
-				return nil, 0, err
+				return nil, err
 			}
 		case "account_id = ?", "account_id = ? AND project_id = ''":
 			// Project collections use the same membership filter as /projects.
@@ -270,24 +274,24 @@ func list[T any](ctx context.Context, db *gorm.DB, q manifest.SearchQuery, where
 				break
 			}
 			if !(systemAuthority(ctx, database(ctx, db)) && kind(model) == "Limit") && !accountAdmin(ctx, db, e.AccountID(id)) {
-				return nil, 0, forbidden()
+				return nil, forbidden()
 			}
 		}
 	}
 	if where == "account_id = '' AND project_id = ''" && !systemAuthority(ctx, database(ctx, db)) {
-		return nil, 0, forbidden()
+		return nil, forbidden()
 	}
 
 	tx, err := visible(ctx, db.Model(&model), kind(model))
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	if where != "" {
 		tx = tx.Where(where, args...)
 	}
 	tx, err = search(tx, q)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	// Case-insensitive user-visible project search over the visible project
 	// fields only. It composes with authorization, status filters, ordering, and
@@ -296,47 +300,41 @@ func list[T any](ctx context.Context, db *gorm.DB, q manifest.SearchQuery, where
 		pattern := "%" + term + "%"
 		tx = tx.Where("name ILIKE ? OR description ILIKE ? OR target ILIKE ?", pattern, pattern, pattern)
 	}
-	var total int64
-	if err = tx.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-	limit := q.Limit
-	if limit == 0 {
-		limit = 100
-	}
-	if limit > 1024 {
-		limit = 1024
-	}
-	if q.Offset > uint(^uint(0)>>1) {
-		return nil, 0, invalid("Offset is too large.")
-	}
-	out := []T{}
-	ordering := "created_at ASC, id ASC"
-	if kind(model) == "Session" {
-		ordering = "created_at DESC, id DESC"
-	}
-	if kind(model) == "AccountInvitation" {
-		ordering, err = invitationOrder(request(ctx).Sort, request(ctx).Direction)
-		if err != nil {
-			return nil, 0, err
-		}
-	}
-	err = tx.Order(ordering).Limit(int(limit)).Offset(int(q.Offset)).Find(&out).Error
+	return tx, nil
+}
+
+func list[T any](ctx context.Context, db *gorm.DB, q manifest.SearchQuery, where string, args ...any) ([]T, manifest.Page, error) {
+	tx, err := listQuery[T](ctx, db, q, where, args...)
 	if err != nil {
-		return nil, 0, err
+		return nil, manifest.Page{}, err
 	}
+	out, page, err := dbstore.PageBy(tx, q, NewestFirst[T]())
+	if err != nil {
+		return nil, manifest.Page{}, pageError(err)
+	}
+	if err = decorated(ctx, db, out); err != nil {
+		return nil, manifest.Page{}, err
+	}
+	return out, page, nil
+}
+
+// decorated completes listed rows, and records that credential metadata was
+// listed.
+func decorated[T any](ctx context.Context, db *gorm.DB, out []T) error {
+	db = database(ctx, db)
 	for i := range out {
-		if err = decorate(ctx, db, &out[i]); err != nil {
-			return nil, 0, err
+		if err := decorate(ctx, db, &out[i]); err != nil {
+			return err
 		}
 	}
+	var model T
 	if kind(model) == "AgentIdentityToken" || kind(model) == "Session" {
 		r := e.Resource{AccountID: principal(ctx).AccountID}
 		if err := metadataAudit(ctx, db, &r, "list-credential-metadata"); err != nil {
-			return nil, 0, err
+			return err
 		}
 	}
-	return out, total, nil
+	return nil
 }
 
 func search(tx *gorm.DB, q manifest.SearchQuery) (*gorm.DB, error) {

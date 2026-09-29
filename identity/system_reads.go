@@ -3,13 +3,13 @@ package identity
 import (
 	"context"
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"strings"
 	"time"
 
 	e "github.com/sre-norns/wyrd/identity/model"
+	"github.com/sre-norns/wyrd/pkg/manifest"
 	"gorm.io/gorm"
 )
 
@@ -122,57 +122,37 @@ func (s *Service) SystemConfiguration(ctx context.Context) (e.SystemConfiguratio
 	return e.SystemConfiguration{ServiceConfiguration: config, Purge: s.config.Purge}, err
 }
 
-func pageQuery(db *gorm.DB, q e.SystemQuery) (*gorm.DB, int, error) {
-	limit := q.Limit
-	if limit == 0 {
-		limit = 20
-	}
-	if limit < 1 || limit > 100 {
-		return nil, 0, invalid("Limit must be between 1 and 100.")
-	}
-	if q.Cursor != "" {
-		cursor, err := base64.RawURLEncoding.DecodeString(q.Cursor)
-		if err != nil || len(cursor) > 128 {
-			return nil, 0, invalid("Invalid cursor.")
-		}
-		db = db.Where("id > ?", string(cursor))
-	}
-	return db.Order("id"), limit, nil
-}
-
-func nextCursor(id string) string { return base64.RawURLEncoding.EncodeToString([]byte(id)) }
-
 func (s *Service) SystemAccounts(ctx context.Context, q e.SystemQuery) (out e.SystemPage[e.SystemAccount], err error) {
 	if !systemAuthority(ctx, database(ctx, s.db)) {
 		return out, forbidden()
 	}
 	out.Items = []e.SystemAccount{}
 	err = database(ctx, s.db).Transaction(func(tx *gorm.DB) error {
-		query, limit, err := pageQuery(tx.Model(&e.Account{}), q)
-		if err != nil {
-			return err
-		}
-		out.Limit = limit
+		query := tx.Model(&e.Account{})
 		if q.Search != "" {
 			query = query.Where("name ILIKE ? OR id ILIKE ?", "%"+q.Search+"%", "%"+q.Search+"%")
 		}
 		if q.Status != "" {
 			query = query.Where("status = ?", q.Status)
 		}
+		keys := NewestFirst[e.Account]()
+		// Derived filters are applied in Go, after the query; SQL cannot count them.
+		keys.NoTotal = q.OwnerSetup != "" || q.LimitState != ""
 
 		// Apply derived filters before pagination so a page never hides later matches.
-		scanned := ""
-		for len(out.Items) <= limit {
-			var accounts []e.Account
-			batch := query.Session(&gorm.Session{})
-			if scanned != "" {
-				batch = batch.Where("id > ?", scanned)
-			}
-			if err := batch.Limit(limit + 1).Find(&accounts).Error; err != nil {
+		var items []e.SystemAccount
+		var accounts []e.Account
+		batchQuery := q
+		page := manifest.Page{}
+		for first := true; ; first = false {
+			batch, batchPage, err := systemPageOf(query.Session(&gorm.Session{}), batchQuery, keys)
+			if err != nil {
 				return err
 			}
-			for _, account := range accounts {
-				scanned = account.ID
+			if first {
+				page = manifest.Page{Limit: batchPage.Limit, Total: batchPage.Total}
+			}
+			for _, account := range batch {
 				item, err := accountProjection(tx, account)
 				if err != nil {
 					return err
@@ -186,20 +166,26 @@ func (s *Service) SystemAccounts(ctx context.Context, q e.SystemQuery) (out e.Sy
 				if q.LimitState == "within-limit" && item.OverLimit {
 					continue
 				}
-				out.Items = append(out.Items, item)
-				if len(out.Items) > limit {
+				items = append(items, item)
+				accounts = append(accounts, account)
+				if uint(len(items)) > page.Limit {
 					break
 				}
 			}
-			if len(accounts) < limit+1 {
+			if uint(len(items)) > page.Limit || batchPage.Next == "" {
 				break
 			}
+			batchQuery.Cursor = batchPage.Next
 		}
-		if len(out.Items) > limit {
-			out.NextCursor = nextCursor(out.Items[limit-1].ID)
-			out.Items = out.Items[:limit]
+		if uint(len(items)) > page.Limit {
+			items = items[:page.Limit]
+			var err error
+			if page.Next, err = keys.Cursor(&accounts[page.Limit-1]); err != nil {
+				return err
+			}
 		}
-		out.GeneratedAt, err = now(tx)
+		var err error
+		out, err = systemPage(tx, items, page)
 		return err
 	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	return
@@ -228,20 +214,11 @@ func (s *Service) SystemMemberships(ctx context.Context, account e.AccountID, q 
 	if _, err = load[e.Account](db, string(account)); err != nil {
 		return
 	}
-	query, limit, err := pageQuery(db.Model(&e.AccountMembership{}).Where("account_id = ?", account), q)
+	items, page, err := systemPageOf(db.Model(&e.AccountMembership{}).Where("account_id = ?", account), q, NewestFirst[e.AccountMembership]())
 	if err != nil {
 		return out, err
 	}
-	var items []e.AccountMembership
-	if err = query.Limit(limit + 1).Find(&items).Error; err != nil {
-		return
-	}
-	out.Items = []e.SystemMembership{}
-	out.Limit = limit
-	if len(items) > limit {
-		out.NextCursor = nextCursor(items[limit-1].ID)
-		items = items[:limit]
-	}
+	projected := []e.SystemMembership{}
 	var owners int64
 	if err = db.Model(&e.AccountMembership{}).Where("account_id = ? AND role = 'owner' AND status = 'active'", account).Count(&owners).Error; err != nil {
 		return
@@ -251,10 +228,9 @@ func (s *Service) SystemMemberships(ctx context.Context, account e.AccountID, q 
 		if err != nil {
 			return out, err
 		}
-		out.Items = append(out.Items, e.SystemMembership{SystemRecord: systemRecord(item.Resource), AccountID: account, UserID: item.UserID, Email: email, Role: item.Role, ActiveOwners: owners})
+		projected = append(projected, e.SystemMembership{SystemRecord: systemRecord(item.Resource), AccountID: account, UserID: item.UserID, Email: email, Role: item.Role, ActiveOwners: owners})
 	}
-	out.GeneratedAt, err = now(db)
-	return
+	return systemPage(db, projected, page)
 }
 
 func (s *Service) SystemInvitations(ctx context.Context, account e.AccountID, q e.SystemQuery) (out e.SystemPage[e.SystemInvitation], err error) {
@@ -265,23 +241,19 @@ func (s *Service) SystemInvitations(ctx context.Context, account e.AccountID, q 
 	if _, err = load[e.Account](db, string(account)); err != nil {
 		return
 	}
-	query, limit, err := invitationPageQuery(db.Model(&e.AccountInvitation{}).Where("account_id = ?", account), q)
+	query := db.Model(&e.AccountInvitation{}).Where("account_id = ?", account)
+	if q.Status != "" {
+		query = query.Where("("+invitationStatusSQL+") = ?", q.Status)
+	}
+	if q.Limit < 0 {
+		return out, invalid("Limit must not be negative.")
+	}
+	items, page, err := invitationPage(query, manifest.SearchQuery{Cursor: q.Cursor, Limit: uint(q.Limit)}, q.Sort, q.Direction)
 	if err != nil {
 		return out, err
 	}
-	var items []e.AccountInvitation
-	if err = query.Limit(limit + 1).Find(&items).Error; err != nil {
-		return
-	}
-	out.Items = []e.SystemInvitation{}
-	out.Limit = limit
-	if len(items) > limit {
-		out.NextCursor = nextCursor(items[limit-1].ID)
-		items = items[:limit]
-	}
-	out.GeneratedAt, err = now(db)
-	if err != nil {
-		return
+	if out, err = systemPage(db, []e.SystemInvitation{}, page); err != nil {
+		return out, err
 	}
 	for _, item := range items {
 		if item.Status == "pending" && !item.ExpiresAt.After(out.GeneratedAt) {
@@ -300,10 +272,7 @@ func (s *Service) SystemActivity(ctx context.Context, q e.SystemQuery) (out e.Sy
 	if !systemAuthority(ctx, db) {
 		return out, forbidden()
 	}
-	query, limit, err := pageQuery(db.Model(&e.SystemActivity{}), q)
-	if err != nil {
-		return out, err
-	}
+	query := db.Model(&e.SystemActivity{})
 	for column, value := range map[string]string{"target_account_id": string(q.AccountID), "kind": q.Kind, "action": q.Action, "outcome": q.Outcome, "actor_id": q.ActorID, "request_id": q.RequestID} {
 		if value != "" {
 			query = query.Where(column+" = ?", value)
@@ -315,17 +284,11 @@ func (s *Service) SystemActivity(ctx context.Context, q e.SystemQuery) (out e.Sy
 	if q.Till != nil {
 		query = query.Where("created_at <= ?", q.Till)
 	}
-	out.Items = []e.SystemActivity{}
-	if err = query.Limit(limit + 1).Find(&out.Items).Error; err != nil {
-		return
+	items, page, err := systemPageOf(query, q, systemNewestFirst[e.SystemActivity]())
+	if err != nil {
+		return out, err
 	}
-	out.Limit = limit
-	if len(out.Items) > limit {
-		out.NextCursor = nextCursor(out.Items[limit-1].ID)
-		out.Items = out.Items[:limit]
-	}
-	out.GeneratedAt, err = now(db)
-	return
+	return systemPage(db, items, page)
 }
 
 func systemPrecondition(ctx context.Context, revision int64) error {

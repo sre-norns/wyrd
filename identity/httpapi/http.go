@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
-	"strconv"
 	"strings"
 
 	"github.com/sre-norns/wyrd/pkg/manifest"
@@ -96,16 +95,27 @@ func (r *resourceResponse[T]) CreatedOrUpdated(v T, created bool, err error) {
 	}
 	r.send(status, v)
 }
-func (r *resourceResponse[T]) List(items []T, total int64, err error) {
+func (r *resourceResponse[T]) List(items []T, page manifest.Page, err error) {
 	if err != nil {
 		writeProblem(r.ctx, err)
 		return
 	}
+	r.ctx.JSON(200, listPage(items, page))
+}
+
+// listPage is the list contract (ADR 0001 §8): {items, limit, next?, total?}.
+func listPage[T any](items []T, page manifest.Page) gin.H {
 	if items == nil {
 		items = []T{}
 	}
-	q := requireSearchQuery(r.ctx)
-	r.ctx.JSON(200, gin.H{"items": items, "total": total, "offset": q.Offset, "limit": q.Limit})
+	body := gin.H{"items": items, "limit": page.Limit}
+	if page.Next != "" {
+		body["next"] = page.Next
+	}
+	if page.Total != nil {
+		body["total"] = *page.Total
+	}
+	return body
 }
 
 var resourcePaths = map[string]string{"Account": "accounts", "AccountMembership": "account-memberships", "AccountInvitation": "account-invitations", "AgentIdentity": "agent-identities", "AgentIdentityToken": "agent-identity-tokens", "Project": "projects", "ProjectMembership": "project-memberships", "AgentAuthorization": "agent-authorizations", "Session": "sessions"}
@@ -409,44 +419,38 @@ func authorizationPath(webLogin, device bool) string {
 	return "/oauth/authorize"
 }
 
-// searchable retains Bark page parameters and adds direct offset and limit.
+// searchable reads a list query. Lists page by cursor only: offset, page and
+// pageSize are refused rather than ignored, since a client whose offset is
+// ignored is served the first page forever.
 func searchable() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
+		if err := refusePositionalPaging(ctx); err != nil {
+			writeProblem(ctx, err)
+			return
+		}
 		var params bark.SearchParams
 		if err := ctx.ShouldBindQuery(&params); err != nil {
 			writeProblem(ctx, &server.Problem{Status: 400, Code: "invalid-query", Detail: err.Error()})
 			return
 		}
-		if params.PageSize == 0 {
-			params.PageSize = 100
-		}
-		if params.PageSize > paginationLimit {
-			params.PageSize = paginationLimit
-		}
-		query, err := params.BuildQuery(100)
+		query, err := params.BuildCursorQuery(bark.DefaultPageLimits)
 		if err != nil {
 			writeProblem(ctx, &server.Problem{Status: 400, Code: "invalid-query", Detail: err.Error()})
 			return
 		}
-		for name, dest := range map[string]*uint{"offset": &query.Offset, "limit": &query.Limit} {
-			if raw, ok := ctx.GetQuery(name); ok {
-				n, err := strconv.ParseUint(raw, 10, 63)
-				if err != nil {
-					writeProblem(ctx, &server.Problem{Status: 400, Code: "invalid-query", Detail: "Invalid " + name + "."})
-					return
-				}
-				*dest = uint(n)
-			}
-		}
-		if query.Limit == 0 {
-			query.Limit = 100
-		}
-		if query.Limit > paginationLimit {
-			query.Limit = paginationLimit
-		}
 		ctx.Set("serviceSearchQuery", query)
 		ctx.Next()
 	}
+}
+
+// refusePositionalPaging answers a request that pages by position.
+func refusePositionalPaging(ctx *gin.Context) error {
+	for _, name := range []string{"offset", "page", "pageSize"} {
+		if _, ok := ctx.GetQuery(name); ok {
+			return &server.Problem{Status: 400, Code: "offset-unsupported", Detail: "Lists page by cursor only: pass the previous page's next as cursor."}
+		}
+	}
+	return nil
 }
 func requireSearchQuery(ctx *gin.Context) manifest.SearchQuery {
 	return ctx.MustGet("serviceSearchQuery").(manifest.SearchQuery)

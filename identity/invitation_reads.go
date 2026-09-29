@@ -1,11 +1,12 @@
 package identity
 
 import (
-	"encoding/base64"
 	"strings"
 	"time"
 
 	e "github.com/sre-norns/wyrd/identity/model"
+	"github.com/sre-norns/wyrd/pkg/dbstore"
+	"github.com/sre-norns/wyrd/pkg/manifest"
 	"gorm.io/gorm"
 )
 
@@ -35,50 +36,88 @@ func invitationSortColumn(field string) (string, error) {
 	}
 }
 
-func invitationOrder(field, direction string) (string, error) {
-	column, err := invitationSortColumn(field)
-	if err != nil {
-		return "", err
-	}
-	if direction == "" {
-		direction = "asc"
-	}
-	if direction != "asc" && direction != "desc" {
-		return "", invalid("Sort direction must be asc or desc.")
-	}
-	return column + " " + strings.ToUpper(direction) + ", id " + strings.ToUpper(direction), nil
+// invitationRow carries the value an invitation list is sorted by when that
+// value is computed rather than stored, so the cursor can record it.
+type invitationRow struct {
+	e.AccountInvitation
+	SortText string    `gorm:"->;column:sort_text"`
+	SortTime time.Time `gorm:"->;column:sort_time"`
 }
 
-func invitationPageQuery(db *gorm.DB, q e.SystemQuery) (*gorm.DB, int, error) {
-	limit := q.Limit
-	if limit == 0 {
-		limit = 20
-	}
-	if limit < 1 || limit > 100 {
-		return nil, 0, invalid("Limit must be between 1 and 100.")
-	}
-	if q.Sort == "" {
-		q.Sort = "id"
-	} // Preserve existing system pagination.
-	order, err := invitationOrder(q.Sort, q.Direction)
+// invitationKeyset is the order of an invitation list sorted by field. Every
+// order ends in the ID, so it is total. With no field the list is newest
+// first, like every other list; a named field defaults to ascending, except
+// creation time, whose natural reading is newest first.
+func invitationKeyset(field, direction string) (keys dbstore.Keyset[invitationRow], selectAs string, err error) {
+	column, err := invitationSortColumn(field)
 	if err != nil {
-		return nil, 0, err
+		return keys, "", err
 	}
-	column, _ := invitationSortColumn(q.Sort)
-	if q.Status != "" {
-		db = db.Where("("+invitationStatusSQL+") = ?", q.Status)
+	switch direction {
+	case "":
+		keys.Descending = column == "created_at"
+	case "asc", "desc":
+		keys.Descending = direction == "desc"
+	default:
+		return keys, "", invalid("Sort direction must be asc or desc.")
 	}
-	if q.Cursor != "" {
-		id, err := base64.RawURLEncoding.DecodeString(q.Cursor)
-		if err != nil || len(id) > 128 {
-			return nil, 0, invalid("Invalid cursor.")
-		}
-		op := ">"
-		if q.Direction == "desc" {
-			op = "<"
-		}
-		// A unique ID breaks ties for every supported sort value.
-		db = db.Where("("+column+", id) "+op+" (SELECT "+column+", id FROM account_invitations WHERE id = ?)", string(id))
+
+	id := dbstore.KeyColumn{Expr: "account_invitations.id"}
+	var key func(r *invitationRow) any
+	kind := dbstore.KeyString
+	switch field {
+	case "id":
+		keys.Columns = []dbstore.KeyColumn{id}
+		keys.Key = func(r *invitationRow) []any { return []any{r.ID} }
+		return keys, "", nil
+	case "email":
+		key = func(r *invitationRow) any { return r.Email }
+	case "role":
+		key = func(r *invitationRow) any { return r.Role }
+	case "expires_at":
+		kind, key = dbstore.KeyTime, func(r *invitationRow) any { return r.ExpiresAt }
+	case "status", "email_status":
+		selectAs, key = "sort_text", func(r *invitationRow) any { return r.SortText }
+	case "last_attempt_at":
+		kind, selectAs, key = dbstore.KeyTime, "sort_time", func(r *invitationRow) any { return r.SortTime }
+	default:
+		kind, key = dbstore.KeyTime, func(r *invitationRow) any { return r.CreatedAt }
 	}
-	return db.Order(order), limit, nil
+	if !strings.HasPrefix(column, "(") && !strings.HasPrefix(column, "COALESCE") {
+		column = "account_invitations." + column
+	}
+	keys.Columns = []dbstore.KeyColumn{{Expr: column, Kind: kind}, id}
+	keys.Key = func(r *invitationRow) []any { return []any{key(r), r.ID} }
+	return keys, selectAs, nil
+}
+
+// invitationPage pages the invitations tx selects, sorted by field. tx is
+// already authorised and filtered.
+func invitationPage(tx *gorm.DB, q manifest.SearchQuery, field, direction string) ([]e.AccountInvitation, manifest.Page, error) {
+	keys, selectAs, err := invitationKeyset(field, direction)
+	if err != nil {
+		return nil, manifest.Page{}, err
+	}
+	total, err := countOf(tx)
+	if err != nil {
+		return nil, manifest.Page{}, err
+	}
+	keys.NoTotal = true
+	// Selected explicitly: scanning into invitationRow would otherwise select
+	// its computed columns from the table.
+	if selectAs != "" {
+		tx = tx.Select("account_invitations.*, " + keys.Columns[0].Expr + " AS " + selectAs)
+	} else {
+		tx = tx.Select("account_invitations.*")
+	}
+	rows, page, err := dbstore.PageBy(tx, q, keys)
+	if err != nil {
+		return nil, manifest.Page{}, pageError(err)
+	}
+	page.Total = total
+	out := make([]e.AccountInvitation, len(rows))
+	for i := range rows {
+		out[i] = rows[i].AccountInvitation
+	}
+	return out, page, nil
 }

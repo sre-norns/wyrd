@@ -13,7 +13,7 @@ type accountsService struct {
 	config *Config
 }
 
-func (a *accountsService) List(ctx context.Context, query manifest.SearchQuery) (result []expbench.Account, total int64, err error) {
+func (a *accountsService) List(ctx context.Context, query manifest.SearchQuery) (result []expbench.Account, page manifest.Page, err error) {
 	return list[expbench.Account](ctx, a.db, query, "")
 }
 
@@ -57,7 +57,7 @@ type accountMembershipsService struct {
 	db *gorm.DB
 }
 
-func (a *accountMembershipsService) List(ctx context.Context, accountID expbench.AccountID, query manifest.SearchQuery) (result []expbench.AccountMembership, total int64, err error) {
+func (a *accountMembershipsService) List(ctx context.Context, accountID expbench.AccountID, query manifest.SearchQuery) (result []expbench.AccountMembership, page manifest.Page, err error) {
 	return list[expbench.AccountMembership](ctx, a.db, query, "account_id = ?", accountID)
 }
 
@@ -79,8 +79,15 @@ type accountInvitationsService struct {
 	config *Config
 }
 
-func (a *accountInvitationsService) List(ctx context.Context, accountID expbench.AccountID, query manifest.SearchQuery) (result []expbench.AccountInvitation, total int64, err error) {
-	return list[expbench.AccountInvitation](ctx, a.db, query, "account_id = ?", accountID)
+func (a *accountInvitationsService) List(ctx context.Context, accountID expbench.AccountID, query manifest.SearchQuery) (result []expbench.AccountInvitation, page manifest.Page, err error) {
+	tx, err := listQuery[expbench.AccountInvitation](ctx, a.db, query, "account_id = ?", accountID)
+	if err != nil {
+		return nil, page, err
+	}
+	if result, page, err = invitationPage(tx, query, request(ctx).Sort, request(ctx).Direction); err != nil {
+		return nil, page, err
+	}
+	return result, page, decorated(ctx, a.db, result)
 }
 
 func (a *accountInvitationsService) Get(ctx context.Context, id expbench.AccountInvitationID) (resource expbench.AccountInvitation, exists bool, commError error) {
