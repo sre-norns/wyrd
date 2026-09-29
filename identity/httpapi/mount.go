@@ -162,6 +162,12 @@ func Mount(router *gin.Engine, srv *server.Service, cfg Config) {
 			srv.AccountInvitations().Accept(ctx.Request.Context(), RequireResourceTypeID[expbench.AccountInvitationID](ctx)),
 		)
 	})
+	// Resend: a new link by email; earlier links stop working. The service
+	// checks the caller administers the invitation's account.
+	v1.POST("/account-invitations/:id/deliveries", IdempotencyAPI(), ResourceValueAPI[expbench.SystemAction](), func(ctx *gin.Context) {
+		out, err := srv.RequestInvitationDelivery(ctx.Request.Context(), ctx.Param("id"), RequireResource[expbench.SystemAction](ctx))
+		response[expbench.AccountInvitation](ctx).Created(out, err)
+	})
 	v1.GET("/accounts/:id/agent-identities", bark.ResourceAPI(), searchable(), func(ctx *gin.Context) {
 		response[expbench.AgentIdentity](ctx).List(
 			srv.AgentIdentities().List(ctx.Request.Context(),

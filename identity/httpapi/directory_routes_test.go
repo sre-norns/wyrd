@@ -29,6 +29,7 @@ func TestMountServesDirectoryRoutes(t *testing.T) {
 		"GET /v1/projects/:id/member-candidates",
 		"GET /v1/projects/:id/agent-candidates",
 		"GET /v1/agent-identities/:id/project-authorizations",
+		"POST /v1/account-invitations/:id/deliveries",
 	} {
 		if !registered[route] {
 			t.Errorf("Mount does not serve %s", route)
