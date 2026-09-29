@@ -3,6 +3,8 @@ package model
 import (
 	"context"
 	"time"
+
+	"github.com/sre-norns/wyrd/pkg/manifest"
 )
 
 type PersonalProfile struct {
@@ -23,7 +25,7 @@ type ProfileAccount struct {
 type PersonalProfileService interface {
 	Get(ctx context.Context) (resource PersonalProfile, exists bool, commError error)
 	Update(ctx context.Context, profile PersonalProfile) (resource PersonalProfile, commError error)
-	AccessibleAccounts(ctx context.Context) (accounts []ProfileAccount, commError error)
+	AccessibleAccounts(ctx context.Context, query manifest.SearchQuery) (accounts []ProfileAccount, page manifest.Page, commError error)
 }
 
 const (

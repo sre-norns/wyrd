@@ -6,6 +6,8 @@ import (
 	"unicode/utf8"
 
 	e "github.com/sre-norns/wyrd/identity/model"
+	"github.com/sre-norns/wyrd/pkg/dbstore"
+	"github.com/sre-norns/wyrd/pkg/manifest"
 	"gorm.io/gorm"
 )
 
@@ -46,23 +48,36 @@ func (p *personalProfileService) Get(ctx context.Context) (resource e.PersonalPr
 	return publicProfile(value), true, nil
 }
 
-func (p *personalProfileService) AccessibleAccounts(ctx context.Context) ([]e.ProfileAccount, error) {
+// profileAccountOrder lists a user's accounts by name, as a switcher shows
+// them; the account ID breaks ties between accounts of the same name.
+var profileAccountOrder = dbstore.Keyset[e.ProfileAccount]{
+	Columns: []dbstore.KeyColumn{{Expr: "accounts.name"}, {Expr: "account_memberships.account_id"}},
+	Key:     func(a *e.ProfileAccount) []any { return []any{a.Name, a.AccountID} },
+}
+
+func (p *personalProfileService) AccessibleAccounts(ctx context.Context, q manifest.SearchQuery) ([]e.ProfileAccount, manifest.Page, error) {
 	u, err := profileUser(ctx, p.db)
 	if err != nil {
-		return nil, err
+		return nil, manifest.Page{}, err
 	}
-	accounts := []e.ProfileAccount{}
-	err = database(ctx, p.db).
+	query := database(ctx, p.db).
 		Table("account_memberships").
-		Select("account_memberships.account_id AS account_id, accounts.name AS name, account_memberships.role AS role, accounts.status AS status").
 		Joins("JOIN accounts ON accounts.id = account_memberships.account_id").
-		Where("account_memberships.user_id = ? AND account_memberships.status = 'active' AND accounts.status = 'active'", u.ID).
-		Order("accounts.name ASC, account_memberships.account_id ASC").
-		Scan(&accounts).Error
+		Where("account_memberships.user_id = ? AND account_memberships.status = 'active' AND accounts.status = 'active'", u.ID)
+	total, err := countOf(query)
 	if err != nil {
-		return nil, err
+		return nil, manifest.Page{}, err
 	}
-	return accounts, nil
+	keys := profileAccountOrder
+	keys.NoTotal = true
+	accounts, page, err := dbstore.PageBy(
+		query.Select("account_memberships.account_id AS account_id, accounts.name AS name, account_memberships.role AS role, accounts.status AS status"),
+		q, keys)
+	if err != nil {
+		return nil, manifest.Page{}, pageError(err)
+	}
+	page.Total = total
+	return accounts, page, nil
 }
 
 func profilePrecondition(ctx context.Context, revision int64) error {

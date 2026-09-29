@@ -7,7 +7,7 @@ import (
 )
 
 type SessionsService interface {
-	List(ctx context.Context, query manifest.SearchQuery) (result []Session, total int64, err error)
+	List(ctx context.Context, query manifest.SearchQuery) (result []Session, page manifest.Page, err error)
 	Get(ctx context.Context, id SessionID) (resource Session, exists bool, commError error)
 	CreateOrUpdate(ctx context.Context, session Session) (resource Session, created bool, commError error)
 }

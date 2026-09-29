@@ -4,11 +4,18 @@ import (
 	"context"
 
 	e "github.com/sre-norns/wyrd/identity/model"
+	"github.com/sre-norns/wyrd/pkg/dbstore"
+	"github.com/sre-norns/wyrd/pkg/manifest"
 	"gorm.io/gorm"
 )
 
-func PageQuery(db *gorm.DB, q e.SystemQuery) (*gorm.DB, int, error) { return pageQuery(db, q) }
-func NextCursor(id string) string                                   { return nextCursor(id) }
+func SystemPageOf[T any](tx *gorm.DB, q e.SystemQuery, keys dbstore.Keyset[T]) ([]T, manifest.Page, error) {
+	return systemPageOf(tx, q, keys)
+}
+func NewSystemPage[T any](db *gorm.DB, items []T, page manifest.Page) (e.SystemPage[T], error) {
+	return systemPage(db, items, page)
+}
+func PageError(err error) error { return pageError(err) }
 func SystemPrecondition(ctx context.Context, revision int64) error {
 	return systemPrecondition(ctx, revision)
 }

@@ -212,10 +212,15 @@ type SystemQuery struct {
 	Till       *time.Time `json:"till,omitempty"`
 }
 
+// SystemPage is a page of a system list: the list contract of every other list
+// (items, limit, next, total), stamped with when it was read.
 type SystemPage[T any] struct {
-	Items       []T       `json:"items"`
-	NextCursor  string    `json:"next_cursor,omitempty"`
-	Limit       int       `json:"limit"`
+	Items []T `json:"items"`
+	Limit int `json:"limit"`
+	// Next continues after this page; absent on the last page.
+	Next string `json:"next,omitempty"`
+	// Total counts the matching rows, when they could be counted.
+	Total       *int64    `json:"total,omitempty"`
 	GeneratedAt time.Time `json:"generated_at"`
 }
 

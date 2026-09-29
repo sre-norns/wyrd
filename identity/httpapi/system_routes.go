@@ -14,10 +14,13 @@ import (
 
 func systemQuery(ctx *gin.Context) (e.SystemQuery, error) {
 	q := e.SystemQuery{Sort: ctx.Query("sort"), Direction: ctx.Query("direction"), Search: ctx.Query("q"), Status: ctx.Query("status"), OwnerSetup: ctx.Query("owner_setup"), LimitState: ctx.Query("limit_state"), Cursor: ctx.Query("cursor"), AccountID: e.AccountID(ctx.Query("account_id")), Kind: ctx.Query("kind"), Action: ctx.Query("action"), Outcome: ctx.Query("outcome"), ActorID: ctx.Query("actor_id"), RequestID: ctx.Query("request_id")}
-	invalid := &server.Problem{Status: 400, Code: "invalid-query", Detail: "Use a limit from 1 to 100 and RFC3339 time filters."}
+	if err := refusePositionalPaging(ctx); err != nil {
+		return q, err
+	}
+	invalid := &server.Problem{Status: 400, Code: "invalid-query", Detail: "Use a positive limit and RFC3339 time filters."}
 	if value := ctx.Query("limit"); value != "" {
 		n, err := strconv.Atoi(value)
-		if err != nil || n < 1 || n > 100 {
+		if err != nil || n < 1 {
 			return q, invalid
 		}
 		q.Limit = n

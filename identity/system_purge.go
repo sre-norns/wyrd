@@ -127,32 +127,23 @@ func (s *Service) DeletionRequests(ctx context.Context, q e.SystemQuery) (out e.
 	if !systemAuthority(ctx, db) {
 		return out, forbidden()
 	}
-	query, limit, err := pageQuery(db.Model(&e.AccountDeletionRequest{}), q)
-	if err != nil {
-		return out, err
-	}
+	query := db.Model(&e.AccountDeletionRequest{})
 	if q.Status != "" {
 		query = query.Where("status = ?", q.Status)
 	}
 	if q.AccountID != "" {
 		query = query.Where("target_account_id = ?", q.AccountID)
 	}
-	out.Items = []e.AccountDeletionRequest{}
-	if err = query.Limit(limit + 1).Find(&out.Items).Error; err != nil {
-		return
+	items, page, err := systemPageOf(query, q, systemNewestFirst[e.AccountDeletionRequest]())
+	if err != nil {
+		return out, err
 	}
-	out.Limit = limit
-	if len(out.Items) > limit {
-		out.NextCursor = nextCursor(out.Items[limit-1].ID)
-		out.Items = out.Items[:limit]
-	}
-	for i := range out.Items {
-		if err = decorateDeletion(db, &out.Items[i]); err != nil {
+	for i := range items {
+		if err = decorateDeletion(db, &items[i]); err != nil {
 			return
 		}
 	}
-	out.GeneratedAt, err = now(db)
-	return
+	return systemPage(db, items, page)
 }
 
 func decorateDeletion(db *gorm.DB, item *e.AccountDeletionRequest) error {

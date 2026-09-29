@@ -12,7 +12,7 @@ type agentAuthorizationsService struct {
 	db *gorm.DB
 }
 
-func (a *agentAuthorizationsService) List(ctx context.Context, projectID expbench.ProjectID, query manifest.SearchQuery) (result []expbench.AgentAuthorization, total int64, err error) {
+func (a *agentAuthorizationsService) List(ctx context.Context, projectID expbench.ProjectID, query manifest.SearchQuery) (result []expbench.AgentAuthorization, page manifest.Page, err error) {
 	return list[expbench.AgentAuthorization](ctx, a.db, query, "project_id = ?", projectID)
 }
 

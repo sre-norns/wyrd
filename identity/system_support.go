@@ -95,21 +95,11 @@ func (s *Service) ImpactPreviews(ctx context.Context, account e.AccountID, q e.S
 	if err = supportAccount(ctx, db, account, "archive"); err != nil {
 		return
 	}
-	query, limit, err := pageQuery(db.Model(&e.ImpactPreview{}).Where("target_account_id = ? AND actor_id = ? AND session_id = ?", account, principal(ctx).UserID, principal(ctx).CredentialID), q)
+	items, page, err := systemPageOf(db.Model(&e.ImpactPreview{}).Where("target_account_id = ? AND actor_id = ? AND session_id = ?", account, principal(ctx).UserID, principal(ctx).CredentialID), q, systemNewestFirst[e.ImpactPreview]())
 	if err != nil {
 		return out, err
 	}
-	out.Items = []e.ImpactPreview{}
-	if err = query.Limit(limit + 1).Find(&out.Items).Error; err != nil {
-		return
-	}
-	out.Limit = limit
-	if len(out.Items) > limit {
-		out.NextCursor = nextCursor(out.Items[limit-1].ID)
-		out.Items = out.Items[:limit]
-	}
-	out.GeneratedAt, err = now(db)
-	return
+	return systemPage(db, items, page)
 }
 
 func consumePreview(ctx context.Context, db *gorm.DB, account e.AccountID, target, operation, id string, revision int64) (e.ImpactPreview, error) {
@@ -441,26 +431,16 @@ func (s *Service) OwnerRecoveries(ctx context.Context, account e.AccountID, q e.
 	if !systemAuthority(ctx, db) {
 		return out, forbidden()
 	}
-	query, limit, err := pageQuery(db.Model(&e.OwnerRecovery{}).Where("target_account_id = ?", account), q)
+	items, page, err := systemPageOf(db.Model(&e.OwnerRecovery{}).Where("target_account_id = ?", account), q, systemNewestFirst[e.OwnerRecovery]())
 	if err != nil {
 		return out, err
 	}
-	out.Items = []e.OwnerRecovery{}
-	if err = query.Limit(limit + 1).Find(&out.Items).Error; err != nil {
-		return
-	}
-	out.Limit = limit
-	if len(out.Items) > limit {
-		out.NextCursor = nextCursor(out.Items[limit-1].ID)
-		out.Items = out.Items[:limit]
-	}
-	for i := range out.Items {
-		if err = decorateRecovery(db, &out.Items[i]); err != nil {
+	for i := range items {
+		if err = decorateRecovery(db, &items[i]); err != nil {
 			return
 		}
 	}
-	out.GeneratedAt, err = now(db)
-	return
+	return systemPage(db, items, page)
 }
 
 func (s *Service) CreateSystemAccount(ctx context.Context, input e.SystemAccountCreate) (out e.SystemAccountCreated, err error) {

@@ -8,6 +8,8 @@ import (
 	"github.com/gin-gonic/gin"
 	server "github.com/sre-norns/wyrd/identity"
 	e "github.com/sre-norns/wyrd/identity/model"
+	"github.com/sre-norns/wyrd/pkg/dbstore"
+	"github.com/sre-norns/wyrd/pkg/manifest"
 )
 
 func personalProfileRead(srv *server.Service) gin.HandlerFunc {
@@ -22,17 +24,12 @@ func personalProfileRead(srv *server.Service) gin.HandlerFunc {
 
 func personalProfileAccounts(srv *server.Service) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		accounts, err := srv.PersonalProfile().AccessibleAccounts(ctx.Request.Context())
+		accounts, page, err := srv.PersonalProfile().AccessibleAccounts(ctx.Request.Context(), requireSearchQuery(ctx))
 		if err != nil {
 			writeProblem(ctx, err)
 			return
 		}
-		ctx.JSON(http.StatusOK, gin.H{
-			"items":  accounts,
-			"total":  len(accounts),
-			"offset": 0,
-			"limit":  100,
-		})
+		ctx.JSON(http.StatusOK, listPage(accounts, page))
 	}
 }
 
@@ -89,7 +86,9 @@ func signInMethodList(srv *server.Service) gin.HandlerFunc {
 			writeProblem(ctx, err)
 			return
 		}
-		ctx.JSON(http.StatusOK, gin.H{"items": methods, "total": len(methods), "offset": 0, "limit": 100})
+		// A user has a sign-in method per provider at most: one page holds them all.
+		total := int64(len(methods))
+		ctx.JSON(http.StatusOK, listPage(methods, manifest.Page{Limit: dbstore.DefaultPageLimit, Total: &total}))
 	}
 }
 

@@ -12,11 +12,11 @@ type projectsService struct {
 	db *gorm.DB
 }
 
-func (p *projectsService) List(ctx context.Context, query manifest.SearchQuery) (result []expbench.Project, total int64, err error) {
+func (p *projectsService) List(ctx context.Context, query manifest.SearchQuery) (result []expbench.Project, page manifest.Page, err error) {
 	return list[expbench.Project](ctx, p.db, query, "")
 }
 
-func (p *projectsService) ListForAccount(ctx context.Context, accountID expbench.AccountID, query manifest.SearchQuery) (result []expbench.Project, total int64, err error) {
+func (p *projectsService) ListForAccount(ctx context.Context, accountID expbench.AccountID, query manifest.SearchQuery) (result []expbench.Project, page manifest.Page, err error) {
 	return list[expbench.Project](ctx, p.db, query, "account_id = ?", accountID)
 }
 

@@ -77,7 +77,7 @@ func Mount(router *gin.Engine, srv *server.Service, cfg Config) {
 		response[expbench.Principal](ctx).Found(srv.Principal().Get(ctx.Request.Context()))
 	})
 	v1.GET("/profile", personalProfileRead(srv))
-	v1.GET("/profile/accounts", personalProfileAccounts(srv))
+	v1.GET("/profile/accounts", searchable(), personalProfileAccounts(srv))
 	v1.PATCH("/profile", personalProfileUpdate(srv))
 	v1.GET("/profile/sign-in-methods", signInMethodList(srv))
 	v1.GET("/profile/sign-in-methods/:id", signInMethodRead(srv))

@@ -103,6 +103,23 @@ the exact CSS and script. Do not pass user-authored CSS as `ThemeCSS`.
 Run `RunInvitationMailWorker`, `RunProjectAccessMailWorker`, and `RunPurgeWorker`
 with the application lifecycle context when those features are enabled.
 
+## Lists
+
+Every list follows ADR 0001 §8: `?limit=&cursor=` in, `{items, limit, next?, total?}`
+out. `limit` defaults to 100 and is capped at 1024. Paging is by cursor only:
+`offset`, `page` and `pageSize` are answered with a 400 problem `offset-unsupported`,
+and a cursor issued for another list order (another invitation `sort`, the other
+`direction`) with `invalid-cursor`.
+
+Lists are newest first (`created_at`, then `id`), except where the order is the point:
+`/profile/accounts` is by account name, and account invitations take `sort` and
+`direction`, the computed sorts (`status`, `email_status`, `last_attempt_at`)
+included. System lists (`SystemPage`) have the same shape plus `generated_at`;
+`total` is absent where derived filters make it uncountable. Paging is applied on top
+of the authorised query (`listQuery`), so a cursor can never widen what a caller sees.
+Products page their own lists with `dbstore.PageBy` and `NewestFirst`, and their system
+lists with `SystemPageOf` / `NewSystemPage`.
+
 ## Compatibility and release
 
 The first release preserves Exp-Bench's tables, text identity IDs, JSON fields,

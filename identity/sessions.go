@@ -12,7 +12,7 @@ type sessionsService struct {
 	db *gorm.DB
 }
 
-func (s *sessionsService) List(ctx context.Context, query manifest.SearchQuery) (result []expbench.Session, total int64, err error) {
+func (s *sessionsService) List(ctx context.Context, query manifest.SearchQuery) (result []expbench.Session, page manifest.Page, err error) {
 	return list[expbench.Session](ctx, s.db, query, "")
 }
 
