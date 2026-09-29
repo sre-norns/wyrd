@@ -2,6 +2,7 @@ package bark
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -137,4 +138,54 @@ func TestPageResponse(t *testing.T) {
 		require.NotContains(t, body, "total", "an uncounted total is absent, not zero")
 		require.NotContains(t, body["_links"].(map[string]any), "next")
 	})
+}
+
+func TestBuildCursorQueryRefusesPositionalPaging(t *testing.T) {
+	for _, query := range []string{"offset=0", "offset=10", "page=1", "pageSize=20", "cursor=abc&offset=5"} {
+		_, err := bindParams(t, query).BuildCursorQuery(DefaultPageLimits)
+		require.ErrorIs(t, err, ErrOffsetUnsupported, query)
+	}
+
+	q, err := bindParams(t, "cursor=abc&limit=5000&labels=team%3Da").BuildCursorQuery(DefaultPageLimits)
+	require.NoError(t, err)
+	require.Equal(t, "abc", q.Cursor)
+	require.EqualValues(t, 1024, q.Limit)
+	require.Zero(t, q.Offset)
+}
+
+func TestCursorListingErrorsAreProblems(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/items", ContentTypeAPI(), CursorSearchableAPI(DefaultPageLimits), func(ctx *gin.Context) {
+		var err error
+		switch ctx.Query("fail") {
+		case "cursor":
+			err = manifest.NewStatusError(http.StatusBadRequest, "invalid-cursor", "invalid page cursor")
+		case "store":
+			err = errors.New("connection reset")
+		}
+		WithContext[string](ctx).Page(nil, manifest.Page{Limit: 100}, err)
+	})
+
+	problem := func(t *testing.T, target string) (int, Problem) {
+		t.Helper()
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, target, nil))
+		require.Equal(t, MimeTypeProblemJSON, w.Header().Get(HTTPHeaderContentType), w.Body.String())
+		var p Problem
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &p))
+		return w.Code, p
+	}
+
+	code, p := problem(t, "/items?offset=20")
+	require.Equal(t, http.StatusBadRequest, code)
+	require.Equal(t, "offset-unsupported", p.Code)
+
+	code, p = problem(t, "/items?fail=cursor")
+	require.Equal(t, http.StatusBadRequest, code)
+	require.Equal(t, "invalid-cursor", p.Code, "an error that carries a status keeps it")
+
+	code, p = problem(t, "/items?fail=store")
+	require.Equal(t, http.StatusInternalServerError, code, "a failure to list is not the client's fault")
+	require.Equal(t, "internal-server-error", p.Code)
 }
