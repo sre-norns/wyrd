@@ -278,6 +278,26 @@ func Mount(router *gin.Engine, srv *server.Service, cfg Config) {
 			srv.AgentAuthorizations().CreateOrUpdate(ctx.Request.Context(), RequireResource[expbench.AgentAuthorization](ctx)),
 		)
 	})
+	// Project access management: whom a project may add, and where a machine
+	// identity is granted. Read models over identity records only.
+	v1.GET("/projects/:id/member-candidates", bark.ResourceAPI(), searchable(), func(ctx *gin.Context) {
+		response[expbench.ProjectMemberCandidate](ctx).List(
+			srv.Directory().ProjectMemberCandidates(ctx.Request.Context(),
+				RequireResourceTypeID[expbench.ProjectID](ctx), ctx.Query("q"), requireSearchQuery(ctx)),
+		)
+	})
+	v1.GET("/projects/:id/agent-candidates", bark.ResourceAPI(), searchable(), func(ctx *gin.Context) {
+		response[expbench.ProjectAgentCandidate](ctx).List(
+			srv.Directory().ProjectAgentCandidates(ctx.Request.Context(),
+				RequireResourceTypeID[expbench.ProjectID](ctx), ctx.Query("q"), requireSearchQuery(ctx)),
+		)
+	})
+	v1.GET("/agent-identities/:id/project-authorizations", bark.ResourceAPI(), searchable(), func(ctx *gin.Context) {
+		response[expbench.AgentProjectAuthorization](ctx).List(
+			srv.Directory().AgentProjectAuthorizations(ctx.Request.Context(),
+				RequireResourceTypeID[expbench.AgentIdentityID](ctx), requireSearchQuery(ctx)),
+		)
+	})
 	registerSystemRoutes(v1, srv)
 }
 

@@ -46,6 +46,40 @@ func countOf(tx *gorm.DB) (*int64, error) {
 	return &total, nil
 }
 
+// textSortedRow is a row of a list sorted by a text expression, with the
+// expression's value read back from SQL: the cursor then holds exactly what the
+// database compared, not Go's idea of lower() or collation.
+type textSortedRow[T any] struct {
+	Item    T      `gorm:"embedded"`
+	SortKey string `gorm:"column:sort_key"`
+	RowID   string `gorm:"column:row_id"`
+}
+
+// PageByText pages query by sortExpr, ascending, with idExpr -- unique per row
+// -- breaking ties. columns is the select list producing T's fields. query is
+// already authorised and filtered; paging only narrows it.
+func PageByText[T any](query *gorm.DB, q manifest.SearchQuery, columns, sortExpr, idExpr string) ([]T, manifest.Page, error) {
+	total, err := countOf(query)
+	if err != nil {
+		return nil, manifest.Page{}, err
+	}
+	keys := dbstore.Keyset[textSortedRow[T]]{
+		Columns: []dbstore.KeyColumn{{Expr: sortExpr}, {Expr: idExpr}},
+		Key:     func(r *textSortedRow[T]) []any { return []any{r.SortKey, r.RowID} },
+		NoTotal: true,
+	}
+	rows, page, err := dbstore.PageBy(query.Select(columns+", "+sortExpr+" AS sort_key, "+idExpr+" AS row_id"), q, keys)
+	if err != nil {
+		return nil, manifest.Page{}, pageError(err)
+	}
+	page.Total = total
+	items := make([]T, len(rows))
+	for i := range rows {
+		items[i] = rows[i].Item
+	}
+	return items, page, nil
+}
+
 // systemNewestFirst is [NewestFirst] for system records.
 func systemNewestFirst[T any]() dbstore.Keyset[T] {
 	return dbstore.Keyset[T]{

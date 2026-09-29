@@ -44,6 +44,9 @@ func (s *Service) ProjectMemberships() e.ProjectMembershipsService {
 	return &projectMembershipsService{db: s.db, config: s.config}
 }
 func (s *Service) Projects() e.ProjectsService { return &projectsService{db: s.db} }
+
+// Directory is the read models behind project access management.
+func (s *Service) Directory() e.DirectoryService { return &directoryService{db: s.db} }
 func (s *Service) ServiceConfig() e.ServiceConfigService {
 	return &serviceConfigService{db: s.db, config: s.config}
 }

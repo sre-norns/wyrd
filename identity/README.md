@@ -120,6 +120,22 @@ of the authorised query (`listQuery`), so a cursor can never widen what a caller
 Products page their own lists with `dbstore.PageBy` and `NewestFirst`, and their system
 lists with `SystemPageOf` / `NewSystemPage`.
 
+## Project access read models
+
+`Service.Directory()` and `Mount` serve the read models behind project access
+management, over identity records only:
+
+- `GET /v1/projects/{id}/member-candidates?q=`: active members of the project's account, with their project membership status;
+- `GET /v1/projects/{id}/agent-candidates?q=`: active machine identities of the account, with their grant status;
+- `GET /v1/agent-identities/{id}/project-authorizations`: a machine identity's grants, with project name and status.
+
+Candidates are visible to whoever may read the project's memberships;
+authorizations to whoever may read the machine identity. Searches match literal
+substrings (`strpos`, so `%` and `_` are not wildcards) and sort by name under
+the database's collation, the key read back from SQL so cursors agree with it
+(`PageByText`). A product that served these paths itself must drop its routes
+when it upgrades: gin refuses to register a path twice, at startup.
+
 ## Compatibility and release
 
 The first release preserves Exp-Bench's tables, text identity IDs, JSON fields,
