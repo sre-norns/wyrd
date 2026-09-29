@@ -35,7 +35,7 @@ func (c *contextualResponse[T]) WithOptions(options ...HResponseOption) *context
 }
 
 func (c *contextualResponse[T]) AbortWithError(code int, err error) {
-	AbortWithError(c.ctx, http.StatusBadRequest, err)
+	AbortWithError(c.ctx, code, err)
 }
 
 func (c *contextualResponse[T]) CreatedOrUpdated(resource T, created bool, err error) {
@@ -129,9 +129,13 @@ func (c *contextualResponse[T]) listPage(results []T, total int64) {
 // Page responds with one page of a listing in the [ListResponse] shape. The
 // next link is built from page.Next, never inferred from the page being full,
 // and it carries the cursor in place of any offset or page parameters.
+//
+// An error is answered as a problem (RFC 9457). One that carries its own status
+// -- a bad cursor, a refused scope -- keeps it; any other failed to list, which
+// is the server's fault, not the request's.
 func (c *contextualResponse[T]) Page(results []T, page manifest.Page, err error) {
 	if err != nil {
-		c.AbortWithError(http.StatusBadRequest, err)
+		AbortWithProblem(c.ctx, http.StatusInternalServerError, err)
 		return
 	}
 

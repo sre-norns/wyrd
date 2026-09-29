@@ -20,7 +20,7 @@ nearly every convention a client has to know:
 | Concurrency | `version` query parameter on delete; update guarded in store | `revision` as ETag, `If-Match` required |
 | Errors | `bark.ErrorResponse` | `application/problem+json` with stable `code` |
 | Retries | none | `Idempotency-Key` required on every POST, stored in-transaction |
-| Lists | `page`/`pageSize` ≤ 512, `{total, count, data}` | `offset`/`limit` ≤ 1024, `{items, total, offset, limit}`; docs promise cursors |
+| Lists | `page`/`pageSize` ≤ 512, `{total, count, data}` | `offset`/`limit` ≤ 1024, `{items, total, offset, limit}`; docs promise cursors (cursor-only since 2026-09-29, §8) |
 | Filtering | `?labels=` selector over JSON labels | the same selector, plus pseudo-labels (`status`, `account`, `project`…) mapped to columns |
 | Removal | soft delete (tombstone) | lifecycle state, no DELETE routes |
 
@@ -163,10 +163,21 @@ claim by the same worker for the same dispatch already returns the same lease.
 - `next` is absent on the last page. It is never inferred from `len(items) == limit`.
 - `total` is advisory unless a product documents it as exact. It may be counted in a
   separate statement from the page, and a client must not use it to compute page links.
+- A cursor is opaque. It records the position after the page's last row *and* the order it
+  was issued in; a cursor presented to a list ordered differently (another sort field, the
+  other direction) is refused as `invalid-cursor`, never resumed at a meaningless place.
 - `offset` is accepted for compatibility, with Urth's `page`/`pageSize` mapped onto it, for
   one minor release. When both styles are present, `offset` and `limit` take precedence; it
   is not an error, because servers preset a default `pageSize` before reading the request. Offset pages skip or repeat rows when earlier rows change; that is
   the reason the cursor is the contract.
+- **Amended 2026-09-29.** Offset paging was proof-of-concept only in both products, so the
+  compatibility window is waived: Exp-Bench and the identity module accept `cursor` only and
+  answer `offset`, `page` or `pageSize` with a 400 problem, code `offset-unsupported`
+  (`bark.CursorSearchableAPI`). Refusing is deliberate — a client whose offset is silently
+  ignored is served the first page forever. Urth's lists move the same way in M4.
+- `dbstore.FindPage` implements this for manifest resources; `dbstore.PageBy` for any
+  filtered gorm query with a declared keyset (flat models, name-ordered pickers); and
+  `dbstore.PageSlice` for listings assembled in memory, with the same cursors.
 
 ### 9. Labels and fields are filtered separately
 

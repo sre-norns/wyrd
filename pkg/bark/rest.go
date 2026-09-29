@@ -265,6 +265,21 @@ func (s SearchParams) BuildQueryWithLimits(limits PageLimits) (manifest.SearchQu
 	}, nil
 }
 
+// ErrOffsetUnsupported is returned by [SearchParams.BuildCursorQuery] for a
+// request that pages by position. Refusing it, rather than ignoring it, is what
+// stops an offset client from being served the first page forever.
+var ErrOffsetUnsupported error = manifest.NewStatusError(http.StatusBadRequest, "offset-unsupported", "this listing pages by cursor only; offset, page and pageSize are not accepted")
+
+// BuildCursorQuery is [SearchParams.BuildQueryWithLimits] for a listing that
+// pages by cursor only: offset, page and pageSize are refused with
+// [ErrOffsetUnsupported].
+func (s SearchParams) BuildCursorQuery(limits PageLimits) (manifest.SearchQuery, error) {
+	if s.OffsetParam != nil || s.Page != 0 || s.PageSize != 0 {
+		return manifest.SearchQuery{}, ErrOffsetUnsupported
+	}
+	return s.BuildQueryWithLimits(limits)
+}
+
 // window resolves the requested offset and limit. offset and limit take
 // precedence over the older page and pageSize, each on its own, rather than
 // being refused alongside them: consumers set a default pageSize before building

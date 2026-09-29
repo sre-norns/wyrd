@@ -249,6 +249,28 @@ func SearchableAPIWithLimits(limits PageLimits) gin.HandlerFunc {
 	}
 }
 
+// CursorSearchableAPI is [SearchableAPIWithLimits] for listings that page by
+// cursor only (see [SearchParams.BuildCursorQuery]). A bad query is answered
+// as a problem (RFC 9457), so a client can branch on its code.
+func CursorSearchableAPI(limits PageLimits) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		var searchParams SearchParams
+		if err := ctx.ShouldBindQuery(&searchParams); err != nil {
+			AbortWithProblem(ctx, http.StatusBadRequest, fmt.Errorf("bad search query: %w", err))
+			return
+		}
+
+		searchQuery, err := searchParams.BuildCursorQuery(limits)
+		if err != nil {
+			AbortWithProblem(ctx, http.StatusBadRequest, fmt.Errorf("bad search query: %w", err))
+			return
+		}
+		ctx.Set(searchQueryParamsKey, searchParams)
+		ctx.Set(searchQueryKey, searchQuery)
+		ctx.Next()
+	}
+}
+
 // RequireSearchQueryParams returns [SearchParams] from the call context previously set by [SearchableAPI] middleware in the call chain.
 // Note, the function should only be called from a handler that follows after [SearchableAPI] middleware in the filter chain.
 func RequireSearchQueryParams(ctx *gin.Context) SearchParams {
