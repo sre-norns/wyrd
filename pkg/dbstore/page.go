@@ -73,6 +73,13 @@ type Keyset[T any] struct {
 	NoTotal bool
 }
 
+// Cursor returns the cursor continuing after row, for a listing that pages
+// through PageBy's rows further -- filtering on something SQL cannot see -- and
+// so ends its page on a row other than PageBy's last.
+func (k Keyset[T]) Cursor(row *T) (string, error) {
+	return keyOrder{columns: k.Columns, descending: k.Descending}.encode(k.Key(row))
+}
+
 // keyOrder is the untyped part of a [Keyset]: the order, and the cursor codec.
 type keyOrder struct {
 	columns    []KeyColumn

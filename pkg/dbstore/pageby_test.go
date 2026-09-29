@@ -225,3 +225,19 @@ func TestPageSliceSortsAndContinuesLikePageBy(t *testing.T) {
 	require.NotNil(t, out)
 	require.Empty(t, page.Next)
 }
+
+// A listing that filters PageBy's rows further ends its page on a row of its
+// choosing; the cursor for that row continues right after it.
+func TestKeysetCursorContinuesAfterAnyRow(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
+		seedEntries(t, db, "a", "b", "c", "d", "e")
+		rows, _, err := dbstore.PageBy(db.Model(&entry{}), manifest.SearchQuery{}, newestFirst)
+		require.NoError(t, err)
+		cursor, err := newestFirst.Cursor(&rows[1])
+		require.NoError(t, err)
+
+		rows, _, err = dbstore.PageBy(db.Model(&entry{}), manifest.SearchQuery{Limit: 1, Cursor: cursor}, newestFirst)
+		require.NoError(t, err)
+		require.Equal(t, "e-02", rows[0].ID)
+	})
+}
