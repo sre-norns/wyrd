@@ -18,8 +18,8 @@ type Options struct {
 	AuthenticationRateLimit int64         `default:"120" env:"AUTHENTICATION_RATE_LIMIT"`
 	GoogleClientID          string        `env:"GOOGLE_CLIENT_ID"`
 	GoogleClientSecret      string        `env:"GOOGLE_CLIENT_SECRET"`
-	GitHubClientID          string        `env:"GITHUB_CLIENT_ID"`
-	GitHubClientSecret      string        `env:"GITHUB_CLIENT_SECRET"`
+	GitHubClientID          string        `name:"github-client-id" env:"GITHUB_CLIENT_ID"`
+	GitHubClientSecret      string        `name:"github-client-secret" env:"GITHUB_CLIENT_SECRET"`
 	OIDCIssuerURL           string        `env:"OIDC_ISSUER_URL"`
 	OIDCClientID            string        `env:"OIDC_CLIENT_ID"`
 	OIDCClientSecret        string        `env:"OIDC_CLIENT_SECRET"`

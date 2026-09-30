@@ -25,5 +25,6 @@ func renderOAuthPage(ctx *gin.Context, status int, name string, page oauthPage) 
 		brand = "SRE-Norns"
 	}
 	page.Message = strings.ReplaceAll(page.Message, "Exp-Bench", brand)
-	pages.Render(ctx, status, name, page, pages.Config{ProductName: c.ProductName, PrivacyURL: c.PrivacyURL, ThemeCSS: c.ThemeCSS})
+	// The whole Config: rebuilding it field by field dropped Copy in v0.4.0.
+	pages.Render(ctx, status, name, page, c)
 }

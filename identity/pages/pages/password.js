@@ -91,25 +91,18 @@ document.querySelectorAll('input[type="password"]').forEach((input, index) => {
   if (!heading) return;
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
 
-  const original = heading.textContent.trim();
-  // Only the "Experience the progress." heroes riff; leave other titles alone.
-  if (original !== 'Experience the progress.') return;
+  // The product's rewordings come with the page (pages.Copy.HeadlineVariants),
+  // so this script stays one static, hashed file for every product. A heading
+  // without them is left alone.
+  let variants;
+  try {
+    variants = JSON.parse(heading.dataset.variants ?? '[]');
+  } catch {
+    return;
+  }
+  if (!Array.isArray(variants) || variants.length < 2) return;
 
-  const variants = [
-    'Experience the progress.',
-    'Experience the progress',
-    'Experience the progress…',
-    'Experience the process.',
-    'Experiment in progress.',
-    'Improvement in progress.',
-    'Improvement in process.',
-    'Embrace the progress.',
-    'Embrace the experiment',
-    'Experiment with the process.',
-    'Progress, in progress.',
-    'Progress the experience',
-    'Progress the process',
-  ];
+  const original = heading.textContent.trim();
 
   let current = original;
 

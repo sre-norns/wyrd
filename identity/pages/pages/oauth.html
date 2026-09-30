@@ -145,7 +145,7 @@
 <div class="layout">
   <aside>
     <span class="eyebrow">{{$.Copy.Tagline}}</span>
-    <h1>{{$.Copy.Headline}}</h1>
+    <h1{{with headlineVariants $.Copy.HeadlineVariants}} data-variants="{{.}}"{{end}}>{{$.Copy.Headline}}</h1>
     <p class="description">
       {{$.Copy.Description}}
     </p>
@@ -181,7 +181,7 @@
 <div class="layout">
   <aside>
     <span class="eyebrow">{{$.Copy.Tagline}}</span>
-    <h1>{{$.Copy.Headline}}</h1>
+    <h1{{with headlineVariants $.Copy.HeadlineVariants}} data-variants="{{.}}"{{end}}>{{$.Copy.Headline}}</h1>
     <p class="description">
       {{$.Copy.Description}}
     </p>
@@ -272,7 +272,7 @@
 
 {{define "invitation"}}{{template "head" .}}
 <div class="layout">
-  <aside><span class="eyebrow">Account invitation</span><h1>{{$.Copy.Headline}}</h1><p class="description">{{$.Copy.InvitationDescription}}</p></aside>
+  <aside><span class="eyebrow">Account invitation</span><h1{{with headlineVariants $.Copy.HeadlineVariants}} data-variants="{{.}}"{{end}}>{{$.Copy.Headline}}</h1><p class="description">{{$.Copy.InvitationDescription}}</p></aside>
   <section class="card">
     <h2>{{.Title}}</h2>
     {{if .Failed}}<p class="error" role="alert" id="invitation-error">{{.Message}}</p>{{end}}

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/url"
@@ -35,7 +36,17 @@ func ValidPrivacyURL(value string) error {
 	return nil
 }
 
-var Pages = template.Must(template.New("oauth").Funcs(template.FuncMap{"providerLabel": server.ProviderLabel}).Parse(oauthHTML))
+var Pages = template.Must(template.New("oauth").Funcs(template.FuncMap{"providerLabel": server.ProviderLabel, "headlineVariants": headlineVariants}).Parse(oauthHTML))
+
+// headlineVariants is the JSON the script reads from the headline's
+// data-variants attribute; html/template escapes it for the attribute.
+func headlineVariants(variants []string) string {
+	if len(variants) < 2 {
+		return ""
+	}
+	encoded, _ := json.Marshal(variants)
+	return string(encoded)
+}
 
 // Config brands the pages for one product. ThemeCSS is appended to the
 // stylesheet; pass the product's @sre-norns/components theme :root block.
@@ -51,9 +62,13 @@ type Copy struct {
 	// Tagline is the eyebrow beside the forms and the footer's description.
 	Tagline string
 	// Headline heads the sign-in, registration, recovery and invitation pages,
-	// and titles the device-approval result. The pages' script rewords only
-	// the default headline, so a product's own stays as written.
+	// and titles the device-approval result.
 	Headline string
+	// HeadlineVariants are the rewordings the pages' script crossfades the
+	// headline through, at an unpredictable pace. Fewer than two variants keep
+	// the headline still. The default variants go with the default headline
+	// only: a product with its own headline and none of its own keeps it still.
+	HeadlineVariants []string
 	// AuthorizeHeadline heads the page that approves an application's access.
 	AuthorizeHeadline string
 	// Description follows the headline.
@@ -65,8 +80,23 @@ type Copy struct {
 }
 
 var DefaultCopy = Copy{
-	Tagline:               "Continuous experimentation",
-	Headline:              "Experience the progress.",
+	Tagline:  "Continuous experimentation",
+	Headline: "Experience the progress.",
+	HeadlineVariants: []string{
+		"Experience the progress.",
+		"Experience the progress",
+		"Experience the progress…",
+		"Experience the process.",
+		"Experiment in progress.",
+		"Improvement in progress.",
+		"Improvement in process.",
+		"Embrace the progress.",
+		"Embrace the experiment",
+		"Experiment with the process.",
+		"Progress, in progress.",
+		"Progress the experience",
+		"Progress the process",
+	},
 	AuthorizeHeadline:     "Connect to your research.",
 	Description:           "Configure projects. Inspect evidence. Track progress toward your objectives.",
 	InvitationDescription: "Join a research account. Your other account memberships stay unchanged.",
@@ -75,6 +105,9 @@ var DefaultCopy = Copy{
 
 // OrDefault fills the fields a product left empty from DefaultCopy.
 func (c Copy) OrDefault() Copy {
+	if c.Headline == "" && c.HeadlineVariants == nil {
+		c.HeadlineVariants = DefaultCopy.HeadlineVariants
+	}
 	for _, f := range []struct {
 		value    *string
 		fallback string
