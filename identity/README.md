@@ -160,6 +160,42 @@ the database's collation, the key read back from SQL so cursors agree with it
 (`PageByText`). A product that served these paths itself must drop its routes
 when it upgrades: gin refuses to register a path twice, at startup.
 
+## Client and CLI kit
+
+`identity/client` is the REST client of every route `Mount` serves. Its service
+clients implement the `model` interfaces the server implements, checked at
+compile time. Its transport is exported: `Exchange`, `Resource[T]`, `Problem`,
+`RequestOptions`. A product builds its own client on it, so that one
+`WithRequestOptions` (If-Match, Idempotency-Key, and the product's own headers
+and query through `Header`/`Query`) reaches both the product's routes and these.
+`StartDeviceAuthorization`, `AwaitDeviceToken`, `RefreshToken` and `RevokeToken`
+are the OAuth device grant, typed.
+
+`identity/cli` is what a product's CLI shares: `auth login|logout|status` (the
+device grant), `profile list|show|use|remove`, `context show|use|clear` (the
+project the profile's commands address, resolved by name or ID when it is set),
+`-o table|wide|yaml|json`, and resource input from a file or stdin, as JSON or
+YAML, decoded strictly. The commands are kong structs; the kit does not import
+kong. A product:
+
+- describes itself with an `App`: the command name, its OAuth client ID (which
+  `Config.Clients` must register), the configuration directory, any legacy
+  directories to read, and the profile-file variable, with a `Getenv` hook for
+  renamed variables;
+- builds an `*Env` from its own global flags and binds it; the kit's commands
+  take it as their `Run` argument;
+- calls `Env.Select` before a command that talks to its API. That returns the
+  stored profile (refreshing a user session within 30 seconds of expiry, and
+  refusing a refresh that changes its authority) or the explicit token.
+
+Profiles are the file Exp-Bench's `expbctl` has always written, plus
+`project_id`/`project_name`. It is written atomically and is readable only by its
+owner, because it holds credentials. `auth logout` revokes a user session and
+forgets the credentials even if the server cannot be reached. The profile itself
+stays, with its endpoint and context. A product that does more after signing in,
+as `expbctl` registers an agent identity, calls `LoginCmd.Login` from its own
+command.
+
 ## Compatibility and release
 
 The first release preserves Exp-Bench's tables, text identity IDs, JSON fields,
