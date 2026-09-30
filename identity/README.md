@@ -92,13 +92,30 @@ Register `<issuer>/oauth/providers/oidc/callback` with the upstream provider.
 Discovery, signature/audience checks, PKCE, nonce verification, and verified email
 requirements use the same flow as Google. Production upstream issuers require
 HTTPS. Local HTTP issuers require development mode. `fakeidp` supports isolated
-provider tests without external accounts.
+provider tests without external accounts. For local development and browser tests,
+`go run github.com/sre-norns/wyrd/identity/cmd/fake-idp` serves it on a loopback
+address (`-listen`, `-client-id` and `-client-secret`, or `FAKE_IDP_LISTEN`,
+`FAKE_IDP_CLIENT_ID` and `FAKE_IDP_CLIENT_SECRET`). Its Google issuer,
+`http://<listen>/google`, also serves OpenID discovery and works as the `oidc` issuer.
 
 `mail.New` selects SMTP, Mailgun, or development-file delivery. `mail.Render`
 renders embedded text and escaped HTML templates. `mail.Mailer` accepts a rendered
 message; the compatibility `mail.Sender` delivers its text part. `pages.Config`
-sets branding, privacy URL and trusted application CSS per render. The CSP hashes
-the exact CSS and script. Do not pass user-authored CSS as `ThemeCSS`.
+(also `httpapi.Config`) sets branding, privacy URL and trusted application CSS per
+render. The CSP hashes the exact CSS and script. Do not pass user-authored CSS as
+`ThemeCSS`.
+
+The page colours are `@sre-norns/components` theme tokens (`--primary-container`,
+`--on-surface`, …) with the Exp-Bench theme's values as defaults, so `ThemeCSS` is
+a product theme's `:root` block. Five colours have no kit token and are named
+`--page-*`: `--page-glow`, `--page-field-outline`, `--page-success`,
+`--page-success-container` and `--page-error-container`. Set them too; the
+defaults are cyan-tinted.
+
+`pages.Config.Copy` carries the wording that belongs to a product: tagline,
+headlines, description, the invitation's description, and what its machine tokens
+are called. Empty fields keep `pages.DefaultCopy`, the wording the pages were
+written with.
 
 Run `RunInvitationMailWorker`, `RunProjectAccessMailWorker`, and `RunPurgeWorker`
 with the application lifecycle context when those features are enabled.
