@@ -253,6 +253,17 @@ func TestStatusShowsThePrincipal(t *testing.T) {
 	}
 }
 
+func TestStatusOfARevokedSessionSaysToSignIn(t *testing.T) {
+	isolate(t)
+	env, _ := testEnv(t, &fakeServer{account: "acme"})
+	_ = env.App.SaveProfiles(Profiles{Default: "default", Profiles: map[string]Profile{
+		"default": {Endpoint: env.Endpoint, Type: PrincipalUser, Scope: model.ScopeAccount, AccountID: "acme", Token: "revoked-elsewhere", ExpiresAt: time.Now().Add(time.Hour)},
+	}})
+	if err := (&StatusCmd{}).Run(env); err == nil || !strings.Contains(err.Error(), "testctl auth login") {
+		t.Fatalf("a revoked session: %v", err)
+	}
+}
+
 func TestContextUseResolvesTheProject(t *testing.T) {
 	isolate(t)
 	server := &fakeServer{account: "acme", projects: []model.Project{project("p1", "web"), project("p2", "web-staging"), project("p3", "twin"), project("p4", "twin")}}

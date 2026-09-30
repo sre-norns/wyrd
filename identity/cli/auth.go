@@ -1,8 +1,12 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"net/http"
 	"time"
+
+	"github.com/sre-norns/wyrd/identity/client"
 
 	"github.com/sre-norns/wyrd/identity/model"
 )
@@ -181,6 +185,12 @@ func (c *StatusCmd) Run(env *Env) error {
 		return err
 	}
 	principal, found, err := api.Principal().Get(env.ctx())
+	var problem *client.Problem
+	if errors.As(err, &problem) && problem.Status == http.StatusUnauthorized {
+		// Revoked elsewhere -- another device, the web sessions page -- or
+		// expired past refreshing.
+		return fmt.Errorf("the server no longer accepts this profile's session; run %s auth login", env.App.Name)
+	}
 	if err != nil {
 		return err
 	}
