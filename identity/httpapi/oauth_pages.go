@@ -18,6 +18,12 @@ func presentation(ctx *gin.Context) Config {
 	return c
 }
 
+// deviceRestart completes the message of a device sign-in that can no longer
+// complete with the product's instruction for starting another.
+func deviceRestart(ctx *gin.Context, lead string) string {
+	return lead + " " + presentation(ctx).Copy.OrDefault().DeviceRetry
+}
+
 func renderOAuthPage(ctx *gin.Context, status int, name string, page oauthPage) {
 	c := presentation(ctx)
 	brand := c.ProductName

@@ -113,8 +113,9 @@ a product theme's `:root` block. Five colours have no kit token and are named
 defaults are cyan-tinted.
 
 `pages.Config.Copy` carries the wording that belongs to a product: tagline,
-headlines, description, the invitation's description, and what its machine tokens
-are called. Empty fields keep `pages.DefaultCopy`, the wording the pages were
+headlines, description, the invitation's description, what its machine tokens
+are called, and `DeviceRetry` -- how to start another device sign-in once one
+expired, naming the product's CLI. Empty fields keep `pages.DefaultCopy`, the wording the pages were
 written with.
 
 `Copy.HeadlineVariants` are the rewordings the pages crossfade the headline

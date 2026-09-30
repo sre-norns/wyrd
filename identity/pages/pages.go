@@ -77,6 +77,9 @@ type Copy struct {
 	InvitationDescription string
 	// MachineTokens names the machine credentials an account deactivation revokes.
 	MachineTokens string
+	// DeviceRetry tells a person whose device sign-in can no longer complete
+	// how to start another. Only the product knows which tool began it.
+	DeviceRetry string
 }
 
 var DefaultCopy = Copy{
@@ -101,6 +104,7 @@ var DefaultCopy = Copy{
 	Description:           "Configure projects. Inspect evidence. Track progress toward your objectives.",
 	InvitationDescription: "Join a research account. Your other account memberships stay unchanged.",
 	MachineTokens:         "agent tokens",
+	DeviceRetry:           "Run expbctl auth login again.",
 }
 
 // OrDefault fills the fields a product left empty from DefaultCopy.
@@ -118,6 +122,7 @@ func (c Copy) OrDefault() Copy {
 		{&c.Description, DefaultCopy.Description},
 		{&c.InvitationDescription, DefaultCopy.InvitationDescription},
 		{&c.MachineTokens, DefaultCopy.MachineTokens},
+		{&c.DeviceRetry, DefaultCopy.DeviceRetry},
 	} {
 		if *f.value == "" {
 			*f.value = f.fallback

@@ -151,6 +151,9 @@ func providerFailure(ctx *gin.Context, provider string, result server.ProviderRe
 	if p != nil && p.Code == "mail-unavailable" {
 		title = "Account email unavailable"
 	}
+	if p != nil && p.Code == "expired_token" {
+		message = deviceRestart(ctx, p.Detail)
+	}
 	renderOAuthPage(ctx, status, "complete", oauthPage{WebLogin: true, Title: title, Message: message, Failed: true, Retry: retry, RetryLabel: "Return to sign-in"})
 }
 

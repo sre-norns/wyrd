@@ -173,7 +173,7 @@ func (s *Service) StartProvider(ctx context.Context, provider, purpose string, f
 }
 
 func deviceExpired() error {
-	return problem(400, "expired_token", "The device request expired. Run expbctl auth again.")
+	return problem(400, "expired_token", "The device request expired.")
 }
 
 func (t upstreamAuthTransaction) outerForm() url.Values {

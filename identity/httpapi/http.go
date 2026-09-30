@@ -383,7 +383,7 @@ func authorizeBrowser(ctx *gin.Context, s *server.Service, webLogin, device bool
 			}
 		}
 		if device && problem != nil && (problem.Code == "invalid_grant" || problem.Code == "expired_token") {
-			message = "The device request expired or is complete. Run expbctl auth again."
+			message = deviceRestart(ctx, "The device request expired or is complete.")
 		}
 		renderOAuthPage(ctx, status, "complete", oauthPage{WebLogin: webLogin, Title: "Authorization could not complete", Message: message, Failed: true, Retry: oauthRetryFor(authorizationPath(webLogin, device), form)})
 		return

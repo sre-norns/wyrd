@@ -3,6 +3,7 @@ package httpapi
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -52,6 +53,35 @@ func TestMountedPagesCarryTheProductsPresentation(t *testing.T) {
 			if strings.Contains(body, text) {
 				t.Errorf("%s: the mounted page still shows the default %q", page, text)
 			}
+		}
+	}
+}
+
+// An expired device sign-in names the product's own tool. The message was
+// hard-coded to expbctl, so Urth told its operators to run another product's CLI.
+func TestExpiredDeviceSignInNamesTheProductsTool(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tc := range []struct {
+		copy pages.Copy
+		want string
+	}{
+		{pages.Copy{DeviceRetry: "Run urthctl auth login again."}, "Run urthctl auth login again."},
+		{pages.Copy{}, pages.DefaultCopy.DeviceRetry},
+	} {
+		router := gin.New()
+		Mount(router, server.NewService(nil), Config{ProductName: "Urth", Copy: tc.copy})
+		router.GET("/device-probe", func(ctx *gin.Context) {
+			expired := &server.Problem{Status: http.StatusBadRequest, Code: "expired_token", Detail: "The device request expired."}
+			providerFailure(ctx, "github", server.ProviderResult{Purpose: "device", Form: url.Values{"user_code": {"ABCDEFGHIJKL"}}}, expired)
+		})
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/device-probe", nil))
+		body := w.Body.String()
+		if !strings.Contains(body, "The device request expired. "+tc.want) {
+			t.Errorf("the page lacks %q", tc.want)
+		}
+		if tc.copy.DeviceRetry != "" && strings.Contains(body, "expbctl") {
+			t.Error("the page names another product's tool")
 		}
 	}
 }
