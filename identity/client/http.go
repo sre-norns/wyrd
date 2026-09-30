@@ -90,7 +90,7 @@ func SearchValues(query manifest.SearchQuery) (url.Values, error) {
 		return nil, &Problem{Status: http.StatusBadRequest, Code: "offset-unsupported", Detail: "Lists page by cursor only: pass the previous page's next as cursor."}
 	}
 	values := url.Values{}
-	if query.Selector != nil {
+	if query.Selector != nil && !query.Selector.Empty() {
 		values.Set("labels", query.Selector.String())
 	}
 	if query.Name != "" {

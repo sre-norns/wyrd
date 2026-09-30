@@ -264,6 +264,24 @@ func TestAllFollowsNextToTheLastPage(t *testing.T) {
 	}
 }
 
+// An empty selector -- what an unset --selector parses to -- filters nothing
+// and sends nothing.
+func TestAnEmptySelectorSendsNoLabels(t *testing.T) {
+	empty, err := manifest.ParseSelector("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := testClient(t, func(r *http.Request) (*http.Response, error) {
+		if r.URL.Query().Has("labels") {
+			t.Errorf("sent %s", r.URL)
+		}
+		return reply(200, `{"items":[]}`), nil
+	})
+	if _, _, err := c.Sessions().List(context.Background(), manifest.SearchQuery{Selector: empty}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestSearchQueriesRejectOffsetsBeforeSending(t *testing.T) {
 	query := manifest.SearchQuery{Offset: 20, Limit: 20}
 	c := testClient(t, func(r *http.Request) (*http.Response, error) {

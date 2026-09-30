@@ -390,3 +390,20 @@ func TestDecodeObject(t *testing.T) {
 		}
 	}
 }
+
+func TestTokenResponsesWithoutOneAuthorityAreRefused(t *testing.T) {
+	if _, err := tokenProfile("https://service.test", model.TokenResponse{AccessToken: "a", RefreshToken: "r", ExpiresIn: 1, Scope: model.ScopeSystem}); err != nil {
+		t.Fatalf("a system session was refused: %v", err)
+	}
+	for _, response := range []model.TokenResponse{
+		{AccessToken: "a", RefreshToken: "r", ExpiresIn: 1},
+		{AccessToken: "a", RefreshToken: "r", ExpiresIn: 1, Scope: model.ScopeSystem, AccountID: "a"},
+		{AccessToken: "a", RefreshToken: "r", ExpiresIn: 1, Scope: model.ScopeAccount},
+		{AccessToken: "a", ExpiresIn: 1, Scope: model.ScopeAccount, AccountID: "a"},
+		{AccessToken: "a", RefreshToken: "r", Scope: model.ScopeAccount, AccountID: "a"},
+	} {
+		if _, err := tokenProfile("https://service.test", response); err == nil {
+			t.Errorf("accepted %+v", response)
+		}
+	}
+}

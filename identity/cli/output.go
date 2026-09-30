@@ -28,7 +28,7 @@ const (
 
 // OutputFlag is the global -o flag. Embed it in a product's root flags.
 type OutputFlag struct {
-	Output string `help:"Output format: table, wide, yaml or json" short:"o" enum:"table,wide,yaml,yml,json" default:"table"`
+	Output string `help:"Output format: table, wide, yaml or json" short:"o" aliases:"format" enum:"table,wide,yaml,yml,json" default:"table"`
 }
 
 // Output is where and how results are printed.
