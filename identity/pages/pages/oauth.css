@@ -1,3 +1,27 @@
+/*
+ * Colours are the token names of @sre-norns/components themes, with the default
+ * theme's values, so a product passes its own theme's :root block as ThemeCSS.
+ * --page-* colours have no kit equivalent. Keep every var() declared here: an
+ * undeclared one resolves to nothing and a page silently loses its colour.
+ */
+:root {
+  --on-surface: #dfe2ee;
+  --page-glow: #18343d;
+  --surface: #0f131c;
+  --primary-fixed-dim: #00dbe9;
+  --primary-container: #00f0ff;
+  --on-surface-variant: #b9cacb;
+  --outline-variant: #3b494b;
+  --surface-container: #1c2028;
+  --page-field-outline: #617071;
+  --on-primary-fixed: #002022;
+  --outline: #849495;
+  --page-success-container: #153b31;
+  --page-success: #6ffbbe;
+  --page-error-container: #472823;
+  --error: #ffb4ab;
+  --surface-container-high: #262a33;
+}
 :root {
   color-scheme: dark;
   font-family:
@@ -6,8 +30,8 @@
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  color: #dfe2ee;
-  background: #0f131c;
+  color: var(--on-surface);
+  background: var(--surface);
 }
 * {
   box-sizing: border-box;
@@ -33,7 +57,7 @@ body {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 46% 36% at 25% 25%, #18343d 0, transparent 58%);
+    radial-gradient(ellipse 46% 36% at 25% 25%, var(--page-glow) 0, transparent 58%);
   transform-origin: 25% 25%;
   will-change: opacity, transform, filter;
 }
@@ -209,9 +233,9 @@ main {
   place-items: center;
   width: 38px;
   height: 38px;
-  border: 1px solid #00dbe9;
+  border: 1px solid var(--primary-fixed-dim);
   border-radius: 8px;
-  color: #00f0ff;
+  color: var(--primary-container);
   font-size: 26px;
 }
 .layout {
@@ -221,7 +245,7 @@ main {
   align-items: center;
 }
 .eyebrow {
-  color: #00dbe9;
+  color: var(--primary-fixed-dim);
   text-transform: uppercase;
   letter-spacing: 2px;
   font-size: 12px;
@@ -240,7 +264,7 @@ h2 {
 }
 p {
   line-height: 1.6;
-  color: #b9cacb;
+  color: var(--on-surface-variant);
 }
 aside p {
   max-width: 340px;
@@ -248,19 +272,19 @@ aside p {
 .client {
   padding: 16px 0;
   margin-top: 28px;
-  border-top: 1px solid #3b494b;
+  border-top: 1px solid var(--outline-variant);
 }
 .client strong {
   display: block;
-  color: #dfe2ee;
+  color: var(--on-surface);
   font-family: ui-monospace, monospace;
   overflow-wrap: anywhere;
   margin-top: 6px;
 }
 .card {
   padding: 32px;
-  background: #1c2028;
-  border: 1px solid #3b494b;
+  background: var(--surface-container);
+  border: 1px solid var(--outline-variant);
   border-radius: 12px;
   box-shadow: 0 24px 80px #0004;
 }
@@ -276,10 +300,10 @@ select {
   width: 100%;
   margin-top: 8px;
   padding: 12px;
-  border: 1px solid #617071;
+  border: 1px solid var(--page-field-outline);
   border-radius: 6px;
-  background: #0f131c;
-  color: #dfe2ee;
+  background: var(--surface);
+  color: var(--on-surface);
   font: inherit;
   min-height: 46px;
 }
@@ -287,12 +311,12 @@ input:focus,
 select:focus,
 button:focus-visible,
 a:focus-visible {
-  outline: 2px solid #00f0ff;
+  outline: 2px solid var(--primary-container);
   outline-offset: 3px;
 }
 small {
   display: block;
-  color: #b9cacb;
+  color: var(--on-surface-variant);
   line-height: 1.5;
   font-size: 13px;
   font-weight: 400;
@@ -314,22 +338,22 @@ button,
   font: inherit;
   font-size: 14px;
   font-weight: 600;
-  border: 1px solid #00f0ff;
+  border: 1px solid var(--primary-container);
   border-radius: 6px;
-  color: #002022;
-  background: #00f0ff;
+  color: var(--on-primary-fixed);
+  background: var(--primary-container);
   cursor: pointer;
   text-decoration: none;
 }
 .secondary {
   background: transparent;
-  border-color: #849495;
-  color: #dfe2ee;
+  border-color: var(--outline);
+  color: var(--on-surface);
 }
 .footer {
   margin-top: 24px;
   font-size: 12px;
-  color: #b9cacb;
+  color: var(--on-surface-variant);
 }
 .completion {
   max-width: 560px;
@@ -345,14 +369,14 @@ button,
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  background: #153b31;
-  color: #6ffbbe;
+  background: var(--page-success-container);
+  color: var(--page-success);
   font-size: 32px;
   margin: 8px auto 24px;
 }
 .error-mark {
-  background: #472823;
-  color: #ffb4ab;
+  background: var(--page-error-container);
+  color: var(--error);
 }
 .completion .actions {
   justify-content: center;
@@ -396,7 +420,7 @@ button,
   width: 100%;
 }
 .form-error {
-  color: #ffb4ab;
+  color: var(--error);
 }
 .login-help {
   display: grid;
@@ -404,13 +428,13 @@ button,
   margin-top: 24px;
 }
 .login-help a {
-  color: #00dbe9;
+  color: var(--primary-fixed-dim);
   cursor: pointer;
   font-size: 14px;
   min-height: 24px;
 }
 .login-help a:focus-visible {
-  outline: 2px solid #00f0ff;
+  outline: 2px solid var(--primary-container);
   outline-offset: 3px;
 }
 .login-help p {
@@ -439,12 +463,12 @@ button,
   padding: 0;
   border: 0;
   background: transparent;
-  color: #b9cacb;
+  color: var(--on-surface-variant);
 }
 .password-toggle:hover,
 .password-toggle[aria-pressed='true'] {
-  color: #00f0ff;
-  background: #262a33;
+  color: var(--primary-container);
+  background: var(--surface-container-high);
 }
 
 .providers {
@@ -460,14 +484,14 @@ button,
   align-items: center;
   gap: 12px;
   margin: 24px 0 0;
-  color: #b9cacb;
+  color: var(--on-surface-variant);
   font-size: 13px;
 }
 .divider::before,
 .divider::after {
   content: "";
   flex: 1;
-  border-top: 1px solid #3b494b;
+  border-top: 1px solid var(--outline-variant);
 }
 .device-code {
   font-family: ui-monospace, monospace;
