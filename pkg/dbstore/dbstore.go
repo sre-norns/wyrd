@@ -259,6 +259,9 @@ func (s *DBStore) Begin(ctx context.Context) (StoreTransaction, error) {
 }
 
 // CreateOrUpdate inserts a new value into the store if the models.ID is nil, otherwise it updates it.
+// With [WithVersion], an update writes only over that version: false with no
+// error means the stored row is at another version (or gone) and nothing was
+// written -- optimistic concurrency, as for [DBStore.Update].
 func (s *DBStore) CreateOrUpdate(ctx context.Context, value any, options ...Option) (exists bool, err error) {
 	return s.singleTransaction(ctx).CreateOrUpdate(value, options...)
 }
