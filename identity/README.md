@@ -117,6 +117,13 @@ headlines, description, the invitation's description, and what its machine token
 are called. Empty fields keep `pages.DefaultCopy`, the wording the pages were
 written with.
 
+`Copy.HeadlineVariants` are the rewordings the pages crossfade the headline
+through, at an unpredictable pace. The headline carries them in a `data-variants`
+attribute, so the pages' script stays one static, CSP-hashed file for every
+product. Fewer than two variants keep the headline still. The default variants
+apply only with the default headline, so a product that sets its own headline
+and no variants keeps it still.
+
 Run `RunInvitationMailWorker`, `RunProjectAccessMailWorker`, and `RunPurgeWorker`
 with the application lifecycle context when those features are enabled.
 

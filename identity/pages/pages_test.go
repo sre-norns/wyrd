@@ -1,8 +1,11 @@
 package pages
 
 import (
+	"encoding/json"
+	"html"
 	"net/http/httptest"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -64,8 +67,7 @@ func TestProductCopyReplacesTheDefault(t *testing.T) {
 		w := httptest.NewRecorder()
 		ctx, _ := gin.CreateTestContext(w)
 		Render(ctx, 200, name, Page{Title: "T", AccountArchived: true}, Config{ProductName: "Urth", Copy: urth})
-		// The script's headline riff names the default headline but acts only on it.
-		body := regexp.MustCompile(`(?s)<script>.*?</script>`).ReplaceAllString(w.Body.String(), "")
+		body := w.Body.String()
 		for _, d := range defaults {
 			if strings.Contains(body, d) {
 				t.Errorf("%s still shows the default %q", name, d)
@@ -86,5 +88,39 @@ func TestProductCopyReplacesTheDefault(t *testing.T) {
 	Render(ctx, 200, "web-login", Page{Title: "T"}, Config{Copy: Copy{Tagline: "Synthetic monitoring"}})
 	if body := w.Body.String(); !strings.Contains(body, "Synthetic monitoring") || !strings.Contains(body, DefaultCopy.Headline) {
 		t.Error("an empty field must keep the default wording")
+	}
+}
+
+// The headline's rewordings travel with the page, and only a headline that has
+// them rotates. The script is shared by every product, so it must name none.
+func TestHeadlineVariantsComeWithTheCopy(t *testing.T) {
+	variantsOf := func(c Config) (variants []string, found bool) {
+		w := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(w)
+		Render(ctx, 200, "web-login", Page{Title: "T"}, c)
+		m := regexp.MustCompile(`<h1 data-variants="([^"]*)">`).FindStringSubmatch(w.Body.String())
+		if m == nil {
+			return nil, false
+		}
+		if err := json.Unmarshal([]byte(html.UnescapeString(m[1])), &variants); err != nil {
+			t.Fatalf("data-variants is not JSON: %v", err)
+		}
+		return variants, true
+	}
+
+	if got, _ := variantsOf(Config{}); !slices.Equal(got, DefaultCopy.HeadlineVariants) {
+		t.Errorf("the default headline rotates through %q, want the default variants", got)
+	}
+	urth := []string{"See it from inside.", "Probe it from inside.", `A "quoted" <one> & more`}
+	if got, _ := variantsOf(Config{Copy: Copy{Headline: urth[0], HeadlineVariants: urth}}); !slices.Equal(got, urth) {
+		t.Errorf("a product's variants rendered as %q, want %q", got, urth)
+	}
+	if got, found := variantsOf(Config{Copy: Copy{Headline: "See it from inside."}}); found {
+		t.Errorf("a product headline without variants must stay still, got %q", got)
+	}
+	for _, phrase := range DefaultCopy.HeadlineVariants {
+		if strings.Contains(passwordScript, phrase) {
+			t.Errorf("the shared script names the product phrase %q", phrase)
+		}
 	}
 }
