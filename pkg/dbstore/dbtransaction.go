@@ -87,6 +87,14 @@ func (tx *gormStoreTransaction) CreateOrUpdate(newValue any, options ...Option) 
 	if err != nil {
 		return false, err
 	}
+	if tc.withVersion != nil {
+		// A versioned save writes only over that version. gorm's Save falls
+		// back to an upsert when its UPDATE matches no row -- the version guard
+		// is a WHERE clause, so a stale write would overwrite the newer row. An
+		// explicit Select("*") disables the fallback and keeps zero values.
+		rx = rx.Select("*").Save(newValue)
+		return rx.RowsAffected == 1, rx.Error
+	}
 	rx = rx.Save(newValue)
 	if errors.Is(rx.Error, gorm.ErrRecordNotFound) {
 		return false, nil
