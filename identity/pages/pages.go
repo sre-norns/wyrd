@@ -37,9 +37,65 @@ func ValidPrivacyURL(value string) error {
 
 var Pages = template.Must(template.New("oauth").Funcs(template.FuncMap{"providerLabel": server.ProviderLabel}).Parse(oauthHTML))
 
-type Config struct{ ProductName, PrivacyURL, ThemeCSS string }
+// Config brands the pages for one product. ThemeCSS is appended to the
+// stylesheet; pass the product's @sre-norns/components theme :root block.
+type Config struct {
+	ProductName, PrivacyURL, ThemeCSS string
+	// Copy is the product's wording. Empty fields keep DefaultCopy's.
+	Copy Copy
+}
+
+// Copy is the wording on the pages that belongs to a product rather than to
+// identity. The defaults are the wording the pages were written with.
+type Copy struct {
+	// Tagline is the eyebrow beside the forms and the footer's description.
+	Tagline string
+	// Headline heads the sign-in, registration, recovery and invitation pages,
+	// and titles the device-approval result. The pages' script rewords only
+	// the default headline, so a product's own stays as written.
+	Headline string
+	// AuthorizeHeadline heads the page that approves an application's access.
+	AuthorizeHeadline string
+	// Description follows the headline.
+	Description string
+	// InvitationDescription follows the headline of an account invitation.
+	InvitationDescription string
+	// MachineTokens names the machine credentials an account deactivation revokes.
+	MachineTokens string
+}
+
+var DefaultCopy = Copy{
+	Tagline:               "Continuous experimentation",
+	Headline:              "Experience the progress.",
+	AuthorizeHeadline:     "Connect to your research.",
+	Description:           "Configure projects. Inspect evidence. Track progress toward your objectives.",
+	InvitationDescription: "Join a research account. Your other account memberships stay unchanged.",
+	MachineTokens:         "agent tokens",
+}
+
+// OrDefault fills the fields a product left empty from DefaultCopy.
+func (c Copy) OrDefault() Copy {
+	for _, f := range []struct {
+		value    *string
+		fallback string
+	}{
+		{&c.Tagline, DefaultCopy.Tagline},
+		{&c.Headline, DefaultCopy.Headline},
+		{&c.AuthorizeHeadline, DefaultCopy.AuthorizeHeadline},
+		{&c.Description, DefaultCopy.Description},
+		{&c.InvitationDescription, DefaultCopy.InvitationDescription},
+		{&c.MachineTokens, DefaultCopy.MachineTokens},
+	} {
+		if *f.value == "" {
+			*f.value = f.fallback
+		}
+	}
+	return c
+}
+
 type Page struct {
 	ProductName string
+	Copy        Copy
 	Invitation  *server.InvitationPage
 	server.BrowserAuthorization
 	AccessForm      string
@@ -73,6 +129,7 @@ func Render(ctx *gin.Context, status int, name string, page Page, cfg Config) {
 	style := oauthStyle + cfg.ThemeCSS
 	page.Style = template.CSS(style)
 	page.ProductName = cfg.ProductName
+	page.Copy = cfg.Copy.OrDefault()
 	if page.ProductName == "" {
 		page.ProductName = "SRE-Norns"
 	}

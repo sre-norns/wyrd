@@ -389,7 +389,7 @@ func authorizeBrowser(ctx *gin.Context, s *server.Service, webLogin, device bool
 		return
 	}
 	if result, ok := result.(map[string]string); ok && result["status"] == "approved" {
-		page := oauthPage{Title: "Experience the progress", Message: "You can now close the window. Return to your terminal to continue."}
+		page := oauthPage{Title: strings.TrimSuffix(presentation(ctx).Copy.OrDefault().Headline, "."), Message: "You can now close the window. Return to your terminal to continue."}
 		if form.Get("decision") == "deny" {
 			page.Title = "Access denied"
 			page.Message = "The application has no access. You can now close the window."

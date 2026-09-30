@@ -3,13 +3,15 @@ package httpapi
 import (
 	server "github.com/sre-norns/wyrd/identity"
 	expbench "github.com/sre-norns/wyrd/identity/model"
+	"github.com/sre-norns/wyrd/identity/pages"
 	"github.com/sre-norns/wyrd/pkg/bark"
 
 	"github.com/gin-gonic/gin"
 )
 
-// Config contains the presentation settings for this mounted identity service.
-type Config struct{ ProductName, PrivacyURL, ThemeCSS string }
+// Config contains the presentation settings for this mounted identity service:
+// the pages' brand, theme and product wording.
+type Config = pages.Config
 
 // Mount serves the shared OAuth and identity API in a product's router.
 func Mount(router *gin.Engine, srv *server.Service, cfg Config) {

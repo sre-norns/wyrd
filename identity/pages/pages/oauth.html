@@ -16,7 +16,7 @@
       </div>
       {{end}} {{define "foot"}}
       <p class="footer">
-        {{$.ProductName}} · Continuous experimentation{{if .PrivacyURL}} ·
+        {{$.ProductName}} · {{$.Copy.Tagline}}{{if .PrivacyURL}} ·
         <a href="{{.PrivacyURL}}">Privacy</a>{{end}}
       </p>
     </main>
@@ -28,10 +28,9 @@
 <div class="layout">
   <aside>
     <span class="eyebrow">Workspace authorization</span>
-    <h1>Connect to your research.</h1>
+    <h1>{{$.Copy.AuthorizeHeadline}}</h1>
     <p class="description">
-      Configure projects. Inspect evidence. Track progress toward your
-      objectives.
+      {{$.Copy.Description}}
     </p>
     <div class="client">
       <small>Application requesting access</small><strong>{{.ClientID}}</strong>
@@ -145,11 +144,10 @@
 >{{end}} {{end}} {{define "web-login"}}{{template "head" .}}
 <div class="layout">
   <aside>
-    <span class="eyebrow">Continuous experimentation</span>
-    <h1>Experience the progress.</h1>
+    <span class="eyebrow">{{$.Copy.Tagline}}</span>
+    <h1>{{$.Copy.Headline}}</h1>
     <p class="description">
-      Configure projects. Inspect evidence. Track progress toward your
-      objectives.
+      {{$.Copy.Description}}
     </p>
   </aside>
   <section class="card">
@@ -157,7 +155,7 @@
     <p>Welcome to {{$.ProductName}}.</p>
     {{if .AccountArchived}}
     <p role="status">
-      Account deactivated. Account sessions and agent tokens are revoked. Stored
+      Account deactivated. Account sessions and {{$.Copy.MachineTokens}} are revoked. Stored
       data remains archived.
     </p>
     {{end}} {{if .Failed}}
@@ -182,11 +180,10 @@
 {{template "foot" .}}{{end}} {{define "account-access"}}{{template "head" .}}
 <div class="layout">
   <aside>
-    <span class="eyebrow">Continuous experimentation</span>
-    <h1>Experience the progress.</h1>
+    <span class="eyebrow">{{$.Copy.Tagline}}</span>
+    <h1>{{$.Copy.Headline}}</h1>
     <p class="description">
-      Configure projects. Inspect evidence. Track progress toward your
-      objectives.
+      {{$.Copy.Description}}
     </p>
   </aside>
   <section class="card">
@@ -275,7 +272,7 @@
 
 {{define "invitation"}}{{template "head" .}}
 <div class="layout">
-  <aside><span class="eyebrow">Account invitation</span><h1>Experience the progress.</h1><p class="description">Join a research account. Your other account memberships stay unchanged.</p></aside>
+  <aside><span class="eyebrow">Account invitation</span><h1>{{$.Copy.Headline}}</h1><p class="description">{{$.Copy.InvitationDescription}}</p></aside>
   <section class="card">
     <h2>{{.Title}}</h2>
     {{if .Failed}}<p class="error" role="alert" id="invitation-error">{{.Message}}</p>{{end}}
