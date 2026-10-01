@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/sre-norns/wyrd/identity/client"
 	"github.com/sre-norns/wyrd/identity/model"
 	"github.com/sre-norns/wyrd/pkg/manifest"
 )
@@ -125,7 +127,11 @@ func (e *Env) findProject(p Profile, nameOrID string) (model.Project, error) {
 	if p.AccountID == "" {
 		return project, fmt.Errorf("project %q not found", nameOrID)
 	}
-	projects, _, err := api.Projects().ListForAccount(e.ctx(), p.AccountID, manifest.SearchQuery{Name: nameOrID, Limit: 2})
+	// The server's name filter matches substrings. Read every page before
+	// selecting an exact match or ruling out duplicate names.
+	projects, err := client.Collect(e.ctx(), manifest.SearchQuery{Name: nameOrID, Limit: 100}, func(ctx context.Context, q manifest.SearchQuery) ([]model.Project, manifest.Page, error) {
+		return api.Projects().ListForAccount(ctx, p.AccountID, q)
+	})
 	if err != nil {
 		return project, err
 	}
