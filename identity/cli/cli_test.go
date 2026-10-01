@@ -384,6 +384,28 @@ func TestOutputFormats(t *testing.T) {
 	}
 }
 
+// ownYAML writes itself as YAML differently from its JSON, as a type holding
+// a time.Duration does.
+type ownYAML struct {
+	Timeout time.Duration `json:"timeout"`
+}
+
+func (o ownYAML) MarshalYAML() (any, error) {
+	return map[string]string{"timeout": o.Timeout.String()}, nil
+}
+
+func TestATypeThatWritesItsOwnYAMLKeepsIt(t *testing.T) {
+	for _, value := range []any{ownYAML{Timeout: 3 * time.Second}, []ownYAML{{Timeout: 3 * time.Second}}} {
+		var out bytes.Buffer
+		if err := (Output{Format: FormatYAML, Stdout: &out}).Encode(value); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(out.String(), "timeout: 3s") {
+			t.Errorf("%T printed its JSON form:\n%s", value, out.String())
+		}
+	}
+}
+
 func TestDecodeObject(t *testing.T) {
 	type doc struct {
 		Name  string `json:"name"`

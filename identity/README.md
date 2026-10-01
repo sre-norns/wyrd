@@ -176,7 +176,10 @@ are the OAuth device grant, typed.
 device grant), `profile list|show|use|remove`, `context show|use|clear` (the
 project the profile's commands address, resolved by name or ID when it is set),
 `-o table|wide|yaml|json`, and resource input from a file or stdin, as JSON or
-YAML, decoded strictly. The commands are kong structs; the kit does not import
+YAML, decoded strictly. YAML output is the JSON document re-rendered in its field
+order, unless the value (or each element of a list) implements `yaml.Marshaler`:
+then it is that. A product whose `apply` decodes YAML with its own types needs
+its own encoding back -- a `time.Duration` is `3s` in YAML and nanoseconds in JSON. The commands are kong structs; the kit does not import
 kong. A product:
 
 - describes itself with an `App`: the command name, its OAuth client ID (which

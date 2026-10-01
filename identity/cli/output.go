@@ -79,8 +79,20 @@ func (o Output) Encode(value any) error {
 }
 
 // toYAML renders the JSON encoding of value as block YAML, keeping the JSON
-// field order.
+// field order -- unless value, or each element of a list, says how it is
+// written as YAML. A product whose `apply` reads YAML with its own decoder
+// needs what its encoder writes: a duration is "3s" there, and nanoseconds in
+// its JSON.
 func toYAML(value any) ([]byte, error) {
+	if marshalsOwnYAML(value) {
+		var out bytes.Buffer
+		encoder := yaml.NewEncoder(&out)
+		encoder.SetIndent(2)
+		if err := encoder.Encode(value); err != nil {
+			return nil, err
+		}
+		return out.Bytes(), encoder.Close()
+	}
 	data, err := json.Marshal(value)
 	if err != nil {
 		return nil, err
@@ -97,6 +109,19 @@ func toYAML(value any) ([]byte, error) {
 		return nil, err
 	}
 	return out.Bytes(), encoder.Close()
+}
+
+var yamlMarshaler = reflect.TypeFor[yaml.Marshaler]()
+
+func marshalsOwnYAML(value any) bool {
+	t := reflect.TypeOf(value)
+	if t == nil {
+		return false
+	}
+	if t.Kind() == reflect.Slice {
+		t = t.Elem()
+	}
+	return t.Implements(yamlMarshaler)
 }
 
 func blockStyle(node *yaml.Node) {
