@@ -41,6 +41,7 @@ func personalProfileUpdate(srv *server.Service) gin.HandlerFunc {
 			return
 		}
 		var input e.PersonalProfile
+		ctx.Set(resourceValueKey, input)
 		fields, err := resource.DecodeInput(body, &input, true)
 		if err != nil {
 			writeProblem(ctx, err)
@@ -93,6 +94,7 @@ func signInMethodUpdate(srv *server.Service) gin.HandlerFunc {
 			return
 		}
 		var input e.SignInMethod
+		ctx.Set(resourceValueKey, input)
 		fields, err := resource.DecodeInput(body, &input, true)
 		if err != nil {
 			writeProblem(ctx, err)

@@ -66,6 +66,10 @@ func TestCanonicalHTTPWorkflow(t *testing.T) {
 		router.ServeHTTP(w, req)
 		return w
 	}
+	invalidProfile := raw("PATCH", "/v1/profile", `{"spec":{"displayName":"   "}}`, `"1"`, "")
+	if invalidProfile.Code != 422 || !strings.Contains(invalidProfile.Body.String(), `"spec.displayName"`) {
+		t.Fatalf("profile field path: %d %s", invalidProfile.Code, invalidProfile.Body)
+	}
 	create := `{"apiVersion":"identity.sre-norns.com/v1","kind":"projects","metadata":{"name":"demo","labels":{"keep":"yes","remove":"old","status":"label"}},"spec":{"description":"description","target":"target"}}`
 	first := raw("POST", "/v1/accounts/"+account.ID+"/projects", create, "", "create-project")
 	if first.Code != 201 {
