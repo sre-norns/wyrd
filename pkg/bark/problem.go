@@ -111,3 +111,39 @@ func codeForStatus(status int) string {
 	}
 	return strings.ReplaceAll(strings.ToLower(text), " ", "-")
 }
+
+// AbortResourceError reports a resource API failure with its declared status and
+// code. Unexpected failures are safe generic 500s. Unlike legacy response
+// helpers, it never turns a typed 403/404/412 into the fallback 400 or exposes an
+// internal error chain. Services adapt their domain errors to Problem first to
+// retain field errors. OAuth endpoints keep their own protocol error handler.
+func AbortResourceError(ctx *gin.Context, err error) {
+	if err == nil {
+		return
+	}
+	p := ProblemFromError(http.StatusInternalServerError, err)
+	// A wrapper can contain internal context. Only a declared public error's
+	// own message belongs in the response, not the wrapping error chain.
+	var explicit *Problem
+	var declared interface {
+		statusReporter
+		error
+	}
+	if !errors.As(err, &explicit) && errors.As(err, &declared) {
+		p.Detail = declared.Error()
+	}
+	if p.Status < 400 || p.Status > 599 {
+		p = &Problem{Status: http.StatusInternalServerError, Code: "internal-error"}
+	}
+	if p.Status >= 500 {
+		status, code := p.Status, p.Code
+		if status == http.StatusInternalServerError {
+			code = "internal-error"
+		}
+		p = &Problem{Status: status, Code: code, Title: http.StatusText(status), Detail: "The service cannot complete the request."}
+	}
+	if p.RequestID == "" {
+		p.RequestID = ctx.GetString("requestID")
+	}
+	AbortWithProblem(ctx, http.StatusInternalServerError, p)
+}

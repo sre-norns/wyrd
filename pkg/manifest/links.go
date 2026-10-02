@@ -2,7 +2,7 @@ package manifest
 
 // HLink is a struct to hold semantic web links, representing action that can be performed on response item
 type HLink struct {
-	Reference    string `form:"ref" json:"ref,omitempty" yaml,omitempty:"ref" xml:"ref"`
+	Reference    string `form:"ref" json:"ref,omitempty" yaml:"ref,omitempty" xml:"ref"`
 	Relationship string `form:"rel" json:"rel,omitempty" yaml:"rel,omitempty" xml:"rel"`
 }
 

@@ -80,3 +80,27 @@ with your models, and `Sweep` old records on a schedule.
 
 Tests that need Postgres skip unless `WYRD_TEST_POSTGRES_URL` is set. Each gets a
 private schema, dropped afterwards.
+
+## Composing a resource query in an existing transaction
+
+`FilterQuery` applies visibility, exact optional scope, case-insensitive name
+search, a half-open time range, label selectors and declared field selectors to
+an existing GORM query. It leaves ordering and pagination to `PageBy`. Use that
+same returned query for selection and totals. This preserves the caller's
+transaction and domain predicates; it does not introduce another commit.
+
+`QueryPolicy.Fields` maps public field paths to server-owned column names.
+`QueryPolicy.Predicates` registers computed attributes such as effective expiry
+or linked-record filters. Build their SQL from trusted code and bind client
+values. `CompareField` provides shared comparison/null semantics for scalar SQL
+expressions. Numeric operators require numeric expressions.
+
+`QueryPolicy.Scope` is exact: an account-only scope matches account records,
+not projects inside the account. For an authorized cross-scope list, omit Scope
+and supply Visibility. A nil Visibility is only for an explicitly authorized
+service query. Scope filtering does not replace authorization.
+
+No limit/offset is applied by FilterQuery; nonzero offsets fail. Existing cursor
+keysets and PageBy provide the page and total. The M8 query tests cover combined
+filters, computed expiry, row visibility, continuation, transaction rollback and
+PostgreSQL behaviour.

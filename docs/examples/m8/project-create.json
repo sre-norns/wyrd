@@ -1,0 +1,6 @@
+{
+  "apiVersion": "identity.sre-norns.com/v1",
+  "kind": "projects",
+  "metadata": {"name": "checkout", "labels": {"team": "payments"}},
+  "spec": {"description": "Checkout research", "target": "checkout-service"}
+}

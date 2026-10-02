@@ -55,6 +55,10 @@ func Fields(columns FieldColumns) Option {
 // [manifest.Requirement.Matches], reading a NULL column as an absent field:
 // negative operators admit it, and every other operator does not.
 func withFields(tx *gorm.DB, config SchemaConfig, extra FieldColumns, selector manifest.Selector) (*gorm.DB, error) {
+	return withFieldPredicates(tx, config, extra, nil, selector)
+}
+
+func withFieldPredicates(tx *gorm.DB, config SchemaConfig, extra FieldColumns, predicates map[string]FieldPredicate, selector manifest.Selector) (*gorm.DB, error) {
 	if tx == nil || selector == nil || selector.Empty() {
 		return tx, nil
 	}
@@ -70,8 +74,22 @@ func withFields(tx *gorm.DB, config SchemaConfig, extra FieldColumns, selector m
 	}
 
 	for _, req := range reqs {
+		if predicate, ok := predicates[req.Key()]; ok {
+			if predicate == nil {
+				return nil, fmt.Errorf("nil predicate for %q", req.Key())
+			}
+			expr, err := predicate(req)
+			if err != nil {
+				return nil, err
+			}
+			if expr == nil {
+				return nil, fmt.Errorf("nil predicate result for %q", req.Key())
+			}
+			tx = tx.Where(expr)
+			continue
+		}
 		name, ok := known[req.Key()]
-		if !ok {
+		if !ok || name == "" {
 			return nil, fmt.Errorf("%w: %q", ErrUnknownField, req.Key())
 		}
 		column := clause.Column{Name: name}
@@ -86,7 +104,7 @@ func withFields(tx *gorm.DB, config SchemaConfig, extra FieldColumns, selector m
 	return tx, nil
 }
 
-func fieldExpression(column clause.Column, req manifest.Requirement) (clause.Expression, error) {
+func fieldExpression(column any, req manifest.Requirement) (clause.Expression, error) {
 	isNull := clause.Eq{Column: column, Value: nil}
 
 	switch req.Operator() {
