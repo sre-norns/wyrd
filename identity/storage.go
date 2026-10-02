@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
@@ -19,9 +18,11 @@ import (
 
 	"github.com/google/uuid"
 	e "github.com/sre-norns/wyrd/identity/model"
+	"github.com/sre-norns/wyrd/identity/resource"
 	"github.com/sre-norns/wyrd/pkg/dbstore"
 	"github.com/sre-norns/wyrd/pkg/manifest"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Problem struct {
@@ -31,7 +32,7 @@ type Problem struct {
 	Code      string            `json:"code"`
 	Detail    string            `json:"detail"`
 	Instance  string            `json:"instance,omitempty"`
-	RequestID string            `json:"request_id,omitempty"`
+	RequestID string            `json:"requestId,omitempty"`
 	Fields    map[string]string `json:"fields,omitempty"`
 }
 
@@ -141,6 +142,9 @@ func now(db *gorm.DB) (time.Time, error) {
 
 func initResource(ctx context.Context, r *e.Resource) {
 	r.ID = newID()
+	if r.Name == "" {
+		r.Name = r.ID
+	}
 	r.Revision = 1
 	r.CreatedAt = time.Now().UTC()
 	r.UpdatedAt = r.CreatedAt
@@ -216,6 +220,10 @@ func save(ctx context.Context, db *gorm.DB, v any) error {
 	m := metadata(v)
 	m.Revision++
 	m.UpdatedAt = time.Now().UTC()
+	m.Actor = principal(ctx)
+	if m.Actor.Type == "" {
+		m.Actor = e.Principal{Type: "service"}
+	}
 	if err := db.Save(v).Error; err != nil {
 		return err
 	}
@@ -226,8 +234,14 @@ func load[T any](db *gorm.DB, id string) (v T, err error) {
 	if id == "" {
 		return v, missing()
 	}
-	err = db.Where("id = ?", id).First(&v).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
+	store, err := dbstore.NewDBStore(db, identitySchema)
+	if err != nil {
+		return v, err
+	}
+	// Internal load is used before service authorization and locking decisions.
+	// It shares the caller's transaction; public collection queries use Visibility.
+	found, err := store.GetByUID(db.Statement.Context, &v, manifest.ResourceID(id))
+	if err == nil && !found {
 		err = missing()
 	}
 	return
@@ -282,16 +296,17 @@ func listQuery[T any](ctx context.Context, db *gorm.DB, q manifest.SearchQuery, 
 		return nil, forbidden()
 	}
 
-	tx, err := visible(ctx, db.Model(&model), kind(model))
-	if err != nil {
-		return nil, err
-	}
+	query := db
 	if where != "" {
-		tx = tx.Where(where, args...)
+		query = query.Where(where, args...)
 	}
-	tx, err = search(tx, q)
+	policy, err := identityQueryPolicy(db, &model)
 	if err != nil {
 		return nil, err
+	}
+	tx, err := dbstore.FilterQuery(ctx, query, &model, identitySchema, q, policy)
+	if err != nil {
+		return nil, pageError(err)
 	}
 	// Case-insensitive user-visible project search over the visible project
 	// fields only. It composes with authorization, status filters, ordering, and
@@ -337,90 +352,48 @@ func decorated[T any](ctx context.Context, db *gorm.DB, out []T) error {
 	return nil
 }
 
-func search(tx *gorm.DB, q manifest.SearchQuery) (*gorm.DB, error) {
-	if !q.FromTime.IsZero() && !q.TillTime.IsZero() && q.FromTime.After(q.TillTime) {
-		return nil, invalid("Time range is reversed.")
+var identitySchema = dbstore.SchemaConfig{
+	IDColumnName: "id", NameColumnName: "name", VersionColumnName: "revision", LabelsColumnName: "labels",
+	CreatedAtColumnName: "created_at", UpdatedAtColumnName: "updated_at", AccountColumnName: "account_id", ProjectColumnName: "project_id",
+}
+
+func identityQueryPolicy(db *gorm.DB, value any) (dbstore.QueryPolicy, error) {
+	policy := dbstore.QueryPolicy{Visibility: Visibility{DB: db}, Predicates: map[string]dbstore.FieldPredicate{}}
+	stmt := &gorm.Statement{DB: db}
+	if err := stmt.Parse(value); err != nil {
+		return policy, err
 	}
-	if q.Name != "" {
-		tx = tx.Where("name ILIKE ?", "%"+q.Name+"%")
-	}
-	if !q.FromTime.IsZero() {
-		tx = tx.Where("created_at >= ?", q.FromTime)
-	}
-	if !q.TillTime.IsZero() {
-		tx = tx.Where("created_at < ?", q.TillTime)
-	}
-	if q.Selector == nil {
-		return tx, nil
-	}
-	reqs, ok := q.Selector.Requirements()
-	if !ok {
-		return tx.Where("FALSE"), nil
-	}
-	for _, r := range reqs {
-		vals := r.Values().Slice()
-		key := r.Key()
-		expr := "labels ->> ?"
-		args := []any{key}
-		// Domain filters use the same selector syntax as labels.
-		columns := map[string]string{"status": "status", "account": "account_id", "project": "project_id", "agent": "agent_id", "role": "role", "objective": "objective_id", "outcome": "outcome", "objective-version": "objective_version_id"}
-		if tx.Statement.Schema == nil {
-			_ = tx.Statement.Parse(tx.Statement.Model)
-		}
-		for key, col := range columns {
-			if tx.Statement.Schema == nil || tx.Statement.Schema.LookUpField(col) == nil {
-				delete(columns, key)
+	columns := map[string]string{"metadata.uid": "id", "metadata.name": "name", "metadata.account": "account_id", "metadata.project": "project_id", "status.phase": "status", "metadata.version": "revision"}
+	if d, ok := resource.Describe(value); ok {
+		for _, f := range d.Fields {
+			if f.Section != "input" {
+				if field := stmt.Schema.LookUpField(f.GoName); field != nil && field.DBName != "" {
+					columns[f.Section+"."+f.Name] = field.DBName
+				}
 			}
 		}
-		if col, ok := columns[key]; ok {
-			expr = col
-			args = nil
+	}
+	for path, column := range columns {
+		field := stmt.Schema.LookUpField(column)
+		if field == nil {
+			continue
 		}
-		if key == "scope" {
-			expr = "CASE WHEN project_id <> '' THEN 'project' WHEN account_id <> '' THEN 'account' ELSE 'system' END"
-			args = nil
+		if field.DataType != "string" && field.DataType != "int" && field.DataType != "uint" && field.DataType != "bool" {
+			continue
 		}
-		if key == "status" && tx.Statement.Schema != nil && tx.Statement.Schema.Table == "account_invitations" {
-			expr = "CASE WHEN status = 'pending' AND expires_at <= clock_timestamp() THEN 'expired' ELSE status END"
-			args = nil
+		expression := clause.Expression(clause.Expr{SQL: "?", Vars: []any{clause.Column{Name: column}}})
+		if path == "status.phase" && kind(value) == "AccountInvitation" {
+			expression = clause.Expr{SQL: "CASE WHEN status = 'pending' AND expires_at <= clock_timestamp() THEN 'expired' ELSE status END"}
 		}
-		add := func(s string, vs ...any) { a := append(append([]any{}, args...), vs...); tx = tx.Where(s, a...) }
-		switch r.Operator() {
-		case manifest.Exists:
-			add(expr + " IS NOT NULL")
-		case manifest.DoesNotExist:
-			add(expr + " IS NULL")
-		case manifest.Equals, manifest.DoubleEquals, manifest.In:
-			if len(vals) == 0 {
-				return nil, invalid("Selector requires values.")
+		numeric := field.DataType == "int" || field.DataType == "uint"
+		policy.Predicates[path] = func(req manifest.Requirement) (clause.Expression, error) {
+			if !numeric && (req.Operator() == manifest.GreaterThan || req.Operator() == manifest.LessThan) {
+				return nil, manifest.NewStatusError(400, "invalid-field-selector", "numeric comparison requires a numeric field")
 			}
-			add(expr+" IN ?", vals)
-		case manifest.NotEquals, manifest.NotIn:
-			if len(vals) == 0 {
-				return nil, invalid("Selector requires values.")
-			}
-			a := append(append([]any{}, args...), args...)
-			a = append(a, vals)
-			tx = tx.Where("("+expr+" IS NULL OR "+expr+" NOT IN ?)", a...)
-		case manifest.GreaterThan, manifest.LessThan:
-			if len(vals) != 1 {
-				return nil, invalid("Numeric selector requires one value.")
-			}
-			if _, err := strconv.ParseInt(vals[0], 10, 64); err != nil {
-				return nil, invalid("Numeric selector requires an integer.")
-			}
-			op := ">"
-			if r.Operator() == manifest.LessThan {
-				op = "<"
-			}
-			a := append(append([]any{}, args...), args...)
-			a = append(a, vals[0])
-			tx = tx.Where("CASE WHEN "+expr+" ~ '^-?[0-9]+$' THEN CAST("+expr+" AS NUMERIC) END "+op+" CAST(? AS NUMERIC)", a...)
-		default:
-			return nil, invalid("Unsupported selector operator.")
+			return dbstore.CompareField(expression, req)
 		}
 	}
-	return tx, nil
+	return policy, nil
 }
 
 func upsert[T any](ctx context.Context, db *gorm.DB, v T) (out T, created bool, err error) {
@@ -448,13 +421,21 @@ func upsert[T any](ctx context.Context, db *gorm.DB, v T) (out T, created bool, 
 					if !allowed[key] {
 						return invalid("Field cannot be changed: " + key)
 					}
-					fields[key] = val
+					if key == "labels" {
+						fields[key], err = mergeLabels(fields[key], val)
+						if err != nil {
+							return invalid("Invalid label patch.")
+						}
+					} else {
+						fields[key] = val
+					}
 				}
 				data, err = json.Marshal(fields)
 				if err != nil {
 					return err
 				}
-				out = old
+				var empty T
+				out = empty
 				if err = json.Unmarshal(data, &out); err != nil {
 					return invalid("Invalid patch.")
 				}
@@ -610,4 +591,30 @@ func cachedAccount(db *gorm.DB, path string) e.AccountID {
 	}
 	query.Where("id = ?", parts[3]).Scan(&owner)
 	return owner.AccountID
+}
+
+// mergeLabels implements JSON merge-patch object semantics, including removal.
+func mergeLabels(old, patch json.RawMessage) (json.RawMessage, error) {
+	if string(patch) == "null" {
+		return json.RawMessage(`{}`), nil
+	}
+	var before map[string]string
+	if err := json.Unmarshal(old, &before); err != nil {
+		return nil, err
+	}
+	if before == nil {
+		before = map[string]string{}
+	}
+	var changes map[string]*string
+	if err := json.Unmarshal(patch, &changes); err != nil {
+		return nil, err
+	}
+	for key, value := range changes {
+		if value == nil {
+			delete(before, key)
+		} else {
+			before[key] = *value
+		}
+	}
+	return json.Marshal(before)
 }

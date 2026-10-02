@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sre-norns/wyrd/identity/model"
+	"github.com/sre-norns/wyrd/identity/resource"
 )
 
 func TestContextNameLookupFollowsPagesBeforeChangingTheProfile(t *testing.T) {
@@ -51,7 +52,11 @@ func TestContextNameLookupFollowsPagesBeforeChangingTheProfile(t *testing.T) {
 				default:
 					t.Errorf("unexpected cursor %q", cursor)
 				}
-				_ = json.NewEncoder(w).Encode(map[string]any{"items": items, "limit": 2, "next": next})
+				wire, err := resource.Encode(items)
+				if err != nil {
+					t.Error(err)
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"items": wire, "limit": 2, "next": next})
 			}))
 			defer server.Close()
 			env := &Env{App: App{ProfilesEnv: "TESTCTL_PROFILES"}, Context: context.Background(), Endpoint: server.URL}

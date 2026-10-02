@@ -11,9 +11,11 @@ import (
 )
 
 type HTTPOutcome struct {
-	Status int
-	Body   []byte
-	Header http.Header
+	// AccountID is typed ownership of a successful create result, not a field parsed from its wire body.
+	AccountID e.AccountID
+	Status    int
+	Body      []byte
+	Header    http.Header
 }
 
 func (s *Service) TransactHTTP(ctx context.Context, token, key, body string, fn func(context.Context) HTTPOutcome) (out HTTPOutcome, err error) {
@@ -43,7 +45,7 @@ func (s *Service) TransactHTTP(ctx context.Context, token, key, body string, fn 
 				if r.Digest != digest(body) {
 					return conflict("idempotency-conflict")
 				}
-				out = HTTPOutcome{Status: r.Status, Body: r.Body}
+				out = HTTPOutcome{AccountID: r.AccountID, Status: r.Status, Body: r.Body}
 				return json.Unmarshal(r.Headers, &out.Header)
 			}
 			if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -60,13 +62,8 @@ func (s *Service) TransactHTTP(ctx context.Context, token, key, body string, fn 
 			account := p.AccountID
 			if p.Scope == e.ScopeSystem {
 				account = cachedAccount(tx, req.Target)
-				if req.Target == "/v1/system/accounts" && out.Status >= 200 && out.Status < 300 {
-					var created struct {
-						ID e.AccountID `json:"id"`
-					}
-					if json.Unmarshal(out.Body, &created) == nil {
-						account = created.ID
-					}
+				if out.Status >= 200 && out.Status < 300 && out.AccountID != "" {
+					account = out.AccountID
 				}
 			}
 			return tx.Create(&idempotencyRecord{AccountID: account, ID: recordID, Digest: digest(body), Status: out.Status, Body: persisted, Headers: headers}).Error
@@ -86,24 +83,27 @@ func redactSecrets(body []byte) []byte {
 	if json.Unmarshal(body, &v) != nil {
 		return body
 	}
-	var strip func(any)
-	strip = func(v any) {
+	var strip func(any, string)
+	strip = func(v any, parent string) {
 		switch obj := v.(type) {
 		case map[string]any:
 			for k, value := range obj {
-				if k == "token" || k == "lease_token" || k == "access_token" || k == "refresh_token" {
+				if parent == "metadata" && k == "labels" {
+					continue
+				}
+				if k == "token" || k == "lease_token" || k == "access_token" || k == "refresh_token" || k == "invitationToken" || k == "leaseToken" || k == "accessToken" || k == "refreshToken" {
 					delete(obj, k)
 				} else {
-					strip(value)
+					strip(value, k)
 				}
 			}
 		case []any:
 			for _, value := range obj {
-				strip(value)
+				strip(value, parent)
 			}
 		}
 	}
-	strip(v)
+	strip(v, "")
 	out, err := json.Marshal(v)
 	if err != nil {
 		return nil

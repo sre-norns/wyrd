@@ -33,7 +33,7 @@ func (a *accountsService) CreateOrUpdate(ctx context.Context, account expbench.A
 			if err := resourceLimit(tx, "", "", "accounts"); err != nil {
 				return err
 			}
-			account.Resource = expbench.Resource{Name: account.Name}
+			account.Resource = expbench.Resource{Name: account.Name, Labels: account.Labels}
 			resource = account
 			if err := insert(ctx, tx, &resource); err != nil {
 				return err

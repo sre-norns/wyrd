@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sre-norns/wyrd/identity/model"
+	"github.com/sre-norns/wyrd/identity/resource"
 	"github.com/sre-norns/wyrd/pkg/manifest"
 )
 
@@ -36,7 +37,11 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	write := func(status int, v any) {
 		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(v)
+		wire, err := resource.Encode(v)
+		if err != nil {
+			panic(err)
+		}
+		_ = json.NewEncoder(w).Encode(wire)
 	}
 	tokens := func() {
 		f.tokenSeq++

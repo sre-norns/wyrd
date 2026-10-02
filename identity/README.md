@@ -241,3 +241,13 @@ layout.
 This extracted module retains Exp-Bench's PolyForm Noncommercial 1.0.0 license
 in `identity/LICENSE`. The parent wyrd module remains Apache-2.0. This extraction
 does not relicense the source product's code.
+
+## Resource wire contract (M8)
+
+Identity resources now use the canonical `apiVersion`/`kind`/`metadata`/`spec`/
+`status` envelope. Flat resource inputs and responses are unsupported. See the
+[field and route contract](docs/resource-contract.md), [route inventory](docs/routes.json)
+and [validated examples](examples/). Use `resource.Encode`/`EncodeResult` in host
+handlers, and the shared SDK/CLI codecs. This is a coordinated M8 adoption change;
+the remaining system validation and product/components PRs gate publication and
+deployment. OAuth and explicit query/command DTOs retain their own protocol shapes.

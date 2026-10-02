@@ -44,7 +44,7 @@ func TestListQueryAndEscapedPath(t *testing.T) {
 		if q.Get("labels") != selector.String() || q.Get("name") != "space & plus+" || q.Get("cursor") != "c7" || q.Has("offset") || q.Get("limit") != "2" || q.Get("from") != from.Format(time.RFC3339Nano) || q.Get("till") != from.Add(time.Hour).Format(time.RFC3339Nano) {
 			t.Fatalf("query: %v", q)
 		}
-		return reply(200, `{"items":[{"id":"m","name":"found"}],"total":9,"limit":2,"next":"c8"}`), nil
+		return reply(200, `{"items":[{"apiVersion":"identity.sre-norns.com/v1","kind":"project-memberships","metadata":{"uid":"m","name":"found","version":1},"spec":{},"status":{"phase":"active"}}],"total":9,"limit":2,"next":"c8"}`), nil
 	})
 	items, total, err := c.ProjectMemberships().List(context.Background(), "p/?#", manifest.SearchQuery{Selector: selector, Name: "space & plus+", Cursor: "c7", Limit: 2, FromTime: from, TillTime: from.Add(time.Hour)})
 	if err != nil || *total.Total != 9 || total.Limit != 2 || total.Next != "c8" || len(items) != 1 || items[0].ID != "m" {
@@ -62,12 +62,12 @@ func TestMutationControls(t *testing.T) {
 		}
 		switch calls {
 		case 1:
-			if r.Method != "POST" || r.URL.Path != "/prefix/v1/accounts/a/projects" || r.Header.Get("Idempotency-Key") != "retry-key" || body["name"] != "project" {
+			if r.Method != "POST" || r.URL.Path != "/prefix/v1/accounts/a/projects" || r.Header.Get("Idempotency-Key") != "retry-key" || body["metadata"].(map[string]any)["name"] != "project" {
 				t.Fatalf("create: %s %s %v %v", r.Method, r.URL, r.Header, body)
 			}
-			return reply(201, `{"id":"p","revision":1,"name":"project"}`), nil
+			return reply(201, `{"apiVersion":"identity.sre-norns.com/v1","kind":"projects","metadata":{"uid":"p","version":1,"name":"project"},"spec":{},"status":{"phase":"active"}}`), nil
 		default:
-			if r.Method != "PATCH" || r.Header.Get("If-Match") != `"1"` || body["name"] != "changed" || r.Header.Get("X-Product-Control") != "on" {
+			if r.Method != "PATCH" || r.Header.Get("If-Match") != `"1"` || body["metadata"].(map[string]any)["name"] != "changed" || r.Header.Get("X-Product-Control") != "on" {
 				t.Fatalf("patch: %v %v", r.Header, body)
 			}
 			for _, key := range []string{"id", "revision", "created_at", "actor", "account_id", "current_context_id"} {
@@ -75,7 +75,7 @@ func TestMutationControls(t *testing.T) {
 					t.Fatalf("immutable field %s", key)
 				}
 			}
-			return reply(200, `{"id":"p","revision":2,"name":"changed"}`), nil
+			return reply(200, `{"apiVersion":"identity.sre-norns.com/v1","kind":"projects","metadata":{"uid":"p","version":2,"name":"changed"},"spec":{},"status":{"phase":"active"}}`), nil
 		}
 	})
 	ctx := context.Background()
@@ -93,17 +93,17 @@ func TestMutationControls(t *testing.T) {
 func TestPartialPatchAndErrors(t *testing.T) {
 	c := testClient(t, func(r *http.Request) (*http.Response, error) {
 		data, _ := io.ReadAll(r.Body)
-		if string(data) != `{"status":"revoked"}` || r.Header.Get("If-Match") != `"3"` {
+		if string(data) != `{"operation":"revoke"}` || r.Header.Get("If-Match") != `"3"` {
 			t.Fatalf("patch %s %v", data, r.Header)
 		}
-		response := reply(412, `{"code":"precondition-failed","detail":"Stale revision","request_id":"request","fields":{"revision":"stale"}}`)
+		response := reply(412, `{"code":"precondition-failed","detail":"Stale revision","requestId":"request","fields":{"metadata.version":"stale"}}`)
 		response.Header.Set("Retry-After", "60")
 		return response, nil
 	})
-	ctx := WithRequestOptions(context.Background(), RequestOptions{IfMatch: `"3"`, Patch: map[string]json.RawMessage{"status": json.RawMessage(`"revoked"`)}})
+	ctx := WithRequestOptions(context.Background(), RequestOptions{IfMatch: `"3"`, Patch: map[string]json.RawMessage{"operation": json.RawMessage(`"revoke"`)}})
 	_, _, err := c.Sessions().CreateOrUpdate(ctx, model.Session{Resource: model.Resource{ID: "session"}})
 	var problem *Problem
-	if !errors.As(err, &problem) || problem.Status != 412 || problem.Code != "precondition-failed" || problem.RequestID != "request" || problem.RetryAfter != "60" || problem.Fields["revision"] != "stale" {
+	if !errors.As(err, &problem) || problem.Status != 412 || problem.Code != "precondition-failed" || problem.RequestID != "request" || problem.RetryAfter != "60" || problem.Fields["metadata.version"] != "stale" {
 		t.Fatalf("problem: %#v", err)
 	}
 }
@@ -116,7 +116,7 @@ func TestResponseSemantics(t *testing.T) {
 		found     bool
 		wantError bool
 	}{
-		{"found", 200, `{"id":"a"}`, true, false}, {"absent", 404, `{"code":"not-found"}`, false, false}, {"denied", 403, `{"detail":"Denied"}`, false, true}, {"malformed", 200, `broken`, false, true}, {"proxy", 502, `<html>bad gateway</html>`, false, true}, {"trailing", 200, `{} {}`, false, true},
+		{"found", 200, `{"apiVersion":"identity.sre-norns.com/v1","kind":"accounts","metadata":{"uid":"a"},"spec":{},"status":{"phase":"active"}}`, true, false}, {"flat", 200, `{"id":"a"}`, false, true}, {"absent", 404, `{"code":"not-found"}`, false, false}, {"denied", 403, `{"detail":"Denied"}`, false, true}, {"malformed", 200, `broken`, false, true}, {"proxy", 502, `<html>bad gateway</html>`, false, true}, {"trailing", 200, `{} {}`, false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testClient(t, func(*http.Request) (*http.Response, error) { return reply(tc.status, tc.body), nil })
@@ -240,9 +240,9 @@ func TestInvalidEndpoint(t *testing.T) {
 
 func TestAllFollowsNextToTheLastPage(t *testing.T) {
 	pages := map[string]string{
-		"":   `{"items":[{"id":"a"},{"id":"b"}],"limit":2,"next":"c2"}`,
-		"c2": `{"items":[{"id":"c"},{"id":"d"}],"limit":2,"next":"c3"}`,
-		"c3": `{"items":[{"id":"e"}],"limit":2}`,
+		"":   `{"items":[{"apiVersion":"identity.sre-norns.com/v1","kind":"sessions","metadata":{"uid":"a"},"spec":{},"status":{}},{"apiVersion":"identity.sre-norns.com/v1","kind":"sessions","metadata":{"uid":"b"},"spec":{},"status":{}}],"limit":2,"next":"c2"}`,
+		"c2": `{"items":[{"apiVersion":"identity.sre-norns.com/v1","kind":"sessions","metadata":{"uid":"c"},"spec":{},"status":{}},{"apiVersion":"identity.sre-norns.com/v1","kind":"sessions","metadata":{"uid":"d"},"spec":{},"status":{}}],"limit":2,"next":"c3"}`,
+		"c3": `{"items":[{"apiVersion":"identity.sre-norns.com/v1","kind":"sessions","metadata":{"uid":"e"},"spec":{},"status":{}}],"limit":2}`,
 	}
 	c := testClient(t, func(r *http.Request) (*http.Response, error) {
 		body, ok := pages[r.URL.Query().Get("cursor")]

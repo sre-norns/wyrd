@@ -1,13 +1,13 @@
 package httpapi
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	server "github.com/sre-norns/wyrd/identity"
 	e "github.com/sre-norns/wyrd/identity/model"
+	"github.com/sre-norns/wyrd/identity/resource"
 	"github.com/sre-norns/wyrd/pkg/dbstore"
 	"github.com/sre-norns/wyrd/pkg/manifest"
 )
@@ -40,42 +40,23 @@ func personalProfileUpdate(srv *server.Service) gin.HandlerFunc {
 			writeProblem(ctx, &server.Problem{Status: http.StatusRequestEntityTooLarge, Code: "body-too-large", Detail: "The request exceeds 1 MiB."})
 			return
 		}
-		var fields map[string]json.RawMessage
-		if err = json.Unmarshal(body, &fields); err != nil || fields == nil {
-			writeProblem(ctx, &server.Problem{Status: http.StatusBadRequest, Code: "invalid-json", Detail: "Invalid JSON body."})
+		var input e.PersonalProfile
+		fields, err := resource.DecodeInput(body, &input, true)
+		if err != nil {
+			writeProblem(ctx, err)
 			return
 		}
-		raw, present := fields["display_name"]
-		if !present || len(fields) != 1 {
-			writeProblem(ctx, &server.Problem{
-				Status: http.StatusUnprocessableEntity,
-				Code:   "validation",
-				Detail: "Only display_name can be changed.",
-				Fields: map[string]string{"display_name": "Provide display_name as a string or null."},
-			})
+		if _, ok := fields["display_name"]; !ok {
+			writeProblem(ctx, &resource.InputError{Field: "spec.displayName", Detail: "Provide a string or null."})
 			return
 		}
-		var displayName *string
-		if string(raw) != "null" {
-			var value string
-			if err = json.Unmarshal(raw, &value); err != nil {
-				writeProblem(ctx, &server.Problem{
-					Status: http.StatusUnprocessableEntity,
-					Code:   "validation",
-					Detail: "The display name must be a string or null.",
-					Fields: map[string]string{"display_name": "Provide display_name as a string or null."},
-				})
-				return
-			}
-			displayName = &value
-		}
-		profile, err := srv.PersonalProfile().Update(ctx.Request.Context(), e.PersonalProfile{DisplayName: displayName})
+		profile, err := srv.PersonalProfile().Update(ctx.Request.Context(), input)
 		if err != nil {
 			writeProblem(ctx, err)
 			return
 		}
 		ctx.Header("ETag", server.ETag(profile.Revision))
-		ctx.JSON(http.StatusOK, profile)
+		response[e.PersonalProfile](ctx).send(http.StatusOK, profile)
 	}
 }
 
@@ -88,7 +69,7 @@ func signInMethodList(srv *server.Service) gin.HandlerFunc {
 		}
 		// A user has a sign-in method per provider at most: one page holds them all.
 		total := int64(len(methods))
-		ctx.JSON(http.StatusOK, listPage(methods, manifest.Page{Limit: dbstore.DefaultPageLimit, Total: &total}))
+		response[e.SignInMethod](ctx).List(methods, manifest.Page{Limit: dbstore.DefaultPageLimit, Total: &total}, nil)
 	}
 }
 
@@ -102,7 +83,7 @@ func signInMethodRead(srv *server.Service) gin.HandlerFunc {
 	}
 }
 
-// signInMethodUpdate accepts only {"status":"revoked"}, the explicit removal
+// signInMethodUpdate accepts only {"operation":"revoke"}, the explicit removal
 // of a provider method, with the current revision in If-Match.
 func signInMethodUpdate(srv *server.Service) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
@@ -111,23 +92,23 @@ func signInMethodUpdate(srv *server.Service) gin.HandlerFunc {
 			writeProblem(ctx, &server.Problem{Status: http.StatusRequestEntityTooLarge, Code: "body-too-large", Detail: "The request exceeds 1 MiB."})
 			return
 		}
-		var fields map[string]json.RawMessage
-		if err = json.Unmarshal(body, &fields); err != nil || fields == nil {
-			writeProblem(ctx, &server.Problem{Status: http.StatusBadRequest, Code: "invalid-json", Detail: "Invalid JSON body."})
+		var input e.SignInMethod
+		fields, err := resource.DecodeInput(body, &input, true)
+		if err != nil {
+			writeProblem(ctx, err)
 			return
 		}
-		var status string
-		raw, present := fields["status"]
-		if !present || len(fields) != 1 || json.Unmarshal(raw, &status) != nil {
-			writeProblem(ctx, &server.Problem{Status: http.StatusUnprocessableEntity, Code: "validation", Detail: "Only status can be changed.", Fields: map[string]string{"status": "Provide status as revoked."}})
+		if len(fields) != 1 || input.Status != "revoked" {
+			writeProblem(ctx, &resource.InputError{Field: "operation", Detail: "Provide revoke."})
 			return
 		}
-		method, err := srv.SignInMethods().Revoke(ctx.Request.Context(), e.SignInMethod{ID: ctx.Param("id"), Status: status})
+		input.ID = ctx.Param("id")
+		method, err := srv.SignInMethods().Revoke(ctx.Request.Context(), input)
 		if err != nil {
 			writeProblem(ctx, err)
 			return
 		}
 		ctx.Header("ETag", server.ETag(method.Revision))
-		ctx.JSON(http.StatusOK, method)
+		response[e.SignInMethod](ctx).send(http.StatusOK, method)
 	}
 }
