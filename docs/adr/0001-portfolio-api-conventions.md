@@ -5,6 +5,10 @@
 - **Applies to:** wyrd (`manifest`, `bark`, `dbstore`), Urth, Exp-Bench. Comserv is
   affected only through wyrd and must keep building unchanged.
 
+## M8 amendment (2026-10-02)
+
+[ADR 0003](0003-canonical-resource-cutover.md) supersedes the compatibility windows below for the M8 resource cutover. No installations or resources need preservation. M8 implements only the canonical resource format and updates current clients/examples together. The original decision below remains as historical context where superseded.
+
 ## Context
 
 Two products are being brought onto one tenancy model, one UI component library and one

@@ -272,11 +272,13 @@ func (s ResourceManifest) MarshalJSON() ([]byte, error) {
 		Metadata ObjectMeta `json:"metadata"`
 		Spec     any        `json:"spec,omitempty"`   // needed to strip any json tags
 		Status   any        `json:"status,omitempty"` // needed to strip any json tags
+		HResponse
 	}{
-		TypeMeta: s.TypeMeta,
-		Metadata: s.Metadata,
-		Spec:     s.Spec,
-		Status:   s.Status,
+		TypeMeta:  s.TypeMeta,
+		Metadata:  s.Metadata,
+		Spec:      s.Spec,
+		Status:    s.Status,
+		HResponse: s.HResponse,
 	})
 }
 
@@ -339,6 +341,7 @@ func (s *ResourceManifest) UnmarshalJSON(data []byte) (err error) {
 		Metadata ObjectMeta      `json:"metadata"`
 		Spec     json.RawMessage `json:"spec"`
 		Status   json.RawMessage `json:"status"`
+		HResponse
 	}{
 		TypeMeta: s.TypeMeta,
 		Metadata: s.Metadata,
@@ -351,21 +354,24 @@ func (s *ResourceManifest) UnmarshalJSON(data []byte) (err error) {
 	*s, err = UnmarshalJSONWithRegister(aux.Kind, InstanceOf, aux.Spec, aux.Status)
 	s.TypeMeta = aux.TypeMeta
 	s.Metadata = aux.Metadata
+	s.HResponse = aux.HResponse
 	return
 }
 
 // MarshalYAML returns a value that can be easily marshaled to yaml representation.
 func (s ResourceManifest) MarshalYAML() (interface{}, error) {
 	return struct {
-		TypeMeta `json:",inline" yaml:",inline"`
-		Metadata ObjectMeta `json:"metadata" yaml:"metadata"`
-		Spec     any        `json:"spec" yaml:"spec,omitempty"`     // needed to strip any json tags
-		Status   any        `json:"status" yaml:"status,omitempty"` // needed to strip any json tags
+		TypeMeta  `json:",inline" yaml:",inline"`
+		Metadata  ObjectMeta `json:"metadata" yaml:"metadata"`
+		Spec      any        `json:"spec" yaml:"spec,omitempty"`     // needed to strip any json tags
+		Status    any        `json:"status" yaml:"status,omitempty"` // needed to strip any json tags
+		HResponse `yaml:",inline"`
 	}{
-		TypeMeta: s.TypeMeta,
-		Metadata: s.Metadata,
-		Spec:     s.Spec,
-		Status:   s.Status,
+		TypeMeta:  s.TypeMeta,
+		Metadata:  s.Metadata,
+		Spec:      s.Spec,
+		Status:    s.Status,
+		HResponse: s.HResponse,
 	}, nil
 }
 

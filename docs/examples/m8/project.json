@@ -1,0 +1,14 @@
+{
+  "apiVersion": "identity.sre-norns.com/v1",
+  "kind": "projects",
+  "metadata": {
+    "uid": "af60d590-09ad-4cbc-9355-7a18e6db3ef1",
+    "name": "checkout",
+    "account": "c8cb5547-4db8-40a8-b9ca-42a86d59bf22",
+    "version": 1,
+    "labels": {"team": "payments"}
+  },
+  "spec": {"description": "Checkout research", "target": "checkout-service"},
+  "status": {"phase": "active"},
+  "_links": {"self": {"ref": "/v1/projects/af60d590-09ad-4cbc-9355-7a18e6db3ef1", "rel": "self"}}
+}
