@@ -202,22 +202,19 @@ command.
 
 ## Compatibility and release
 
-The first release preserves Exp-Bench's tables, text identity IDs, JSON fields,
-route names, problem URNs, cookie names, and OAuth behavior. `MachineIdentity`,
-`MachineToken`, and `MachineGrant` are aliases of the existing Agent types. Agent
-routes/tables and legacy project fields remain until the coordinated M8 envelope
-conversion. Product compatibility aliases do not contain a second implementation.
+M8 is a coordinated clean resource cutover. Flat resource reads and writes are
+unsupported; no old installations or stored resources are migrated. The original
+identity/v0.1.0 extraction compatibility policy is superseded by the
+[canonical contract](docs/resource-contract.md). OAuth and explicit command/query
+DTOs retain their documented protocols. Go domain aliases are not wire adapters.
 
-`Migrate` requires PostgreSQL. It uses `identity_schema_revisions` independently
-of the product's schema revision and rejects a newer identity revision. Existing
-Exp-Bench databases need no table rename or data rewrite. Migrate identity before
-serving traffic; product migrations remain product-owned.
-
-Publish the nested module with tag **`identity/v0.1.0`**, after merging the wyrd
-branch. Then run `go mod tidy` in the Exp-Bench adoption branch to add the published
-identity checksums and run its CI. A consumer cannot fetch this new module before
-the tag exists. Local development uses a temporary Go workspace; no local replace
-belongs in a released consumer module.
+`Migrate` requires PostgreSQL, creates the identity schema and uses its independent
+`identity_schema_revisions` table. Product schema creation remains product-owned.
+Publish **identity/v0.7.0** after both M8 identity PRs are merged and audited;
+root **v0.7.0** is the required dependency. Verify the tag's exact merged commit
+and downloaded module with `GOWORK=off`. Product backend, UI, SDK and CLI adoption
+must ship together using published pins. Temporary external Go workspaces may
+validate source compatibility; no local replacement belongs in a consumer release.
 
 ## Verification
 
@@ -249,5 +246,28 @@ Identity resources now use the canonical `apiVersion`/`kind`/`metadata`/`spec`/
 [field and route contract](docs/resource-contract.md), [route inventory](docs/routes.json)
 and [validated examples](examples/). Use `resource.Encode`/`EncodeResult` in host
 handlers, and the shared SDK/CLI codecs. This is a coordinated M8 adoption change;
-the remaining system validation and product/components PRs gate publication and
-deployment. OAuth and explicit query/command DTOs retain their own protocol shapes.
+merge and audit both identity PRs before publication, then complete the
+product/components adoption gates before deployment. OAuth and explicit query/command DTOs retain their own protocol shapes.
+
+## Shared system adapters and history
+
+Hosts serving system administration can mount the shared identity routes:
+
+```go
+httpapi.Mount(router, identityService, pageConfig)
+httpapi.MountSystem(router, identityService)
+```
+
+Remove equivalent host routes before mounting; retain product overview, health,
+capacity, policy and event-stream handlers. See the [adoption matrix](docs/system-adoption.md).
+Use `client.New(...).System()` (after handling New's error) for the shared system
+SDK. Read a `SystemAccount` before calling `ChangeLifecycle`; the SDK sends its
+revision as If-Match. Pass `RequestOptions.IdempotencyKey` when retrying a POST.
+The response decoder handles nested canonical resources and operation-only tokens.
+
+In an `Extensions.Auditor` callback, retain `Audit.Resource` for domain policy and
+persist `Audit.Snapshot` for new identity history. It is canonical, credential-free
+JSON prepared inside the existing transaction. System actions provide a safe
+SystemActivity snapshot and retain their original action/target metadata. Do not
+serialize the full principal or replace domain authorization inputs with wire
+maps. Host product resources continue to use their own declared snapshot codec.

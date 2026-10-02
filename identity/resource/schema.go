@@ -154,6 +154,7 @@ type ImpactPreviewSpec struct {
 	Operation       string          `json:"operation" yaml:"operation"`
 }
 type ImpactPreviewStatus struct {
+	InitiatorID    string `json:"initiatorId,omitempty" yaml:"initiatorId,omitempty"`
 	State          `yaml:",inline"`
 	TargetRevision int64            `json:"targetRevision" yaml:"targetRevision"`
 	Counts         map[string]int64 `json:"counts" yaml:"counts"`
@@ -168,6 +169,7 @@ type OwnerRecoverySpec struct {
 	Reference            string          `json:"reference,omitempty" yaml:"reference,omitempty"`
 }
 type OwnerRecoveryStatus struct {
+	InitiatorID             string `json:"initiatorId,omitempty" yaml:"initiatorId,omitempty"`
 	State                   `yaml:",inline"`
 	EmailDelivery           *Delivery `json:"emailDelivery,omitempty" yaml:"emailDelivery,omitempty"`
 	InvitationID            string    `json:"invitationId" yaml:"invitationId"`
@@ -180,6 +182,7 @@ type StepUpAuthorizationSpec struct {
 	Action          string          `json:"action" yaml:"action"`
 }
 type StepUpAuthorizationStatus struct {
+	InitiatorID     string `json:"initiatorId,omitempty" yaml:"initiatorId,omitempty"`
 	State           `yaml:",inline"`
 	AuthenticatedAt time.Time  `json:"authenticatedAt" yaml:"authenticatedAt"`
 	AssuranceMethod string     `json:"assuranceMethod" yaml:"assuranceMethod"`
@@ -192,6 +195,7 @@ type AccountDeletionRequestSpec struct {
 	Reference       string          `json:"reference,omitempty" yaml:"reference,omitempty"`
 }
 type AccountDeletionRequestStatus struct {
+	InitiatorID  string `json:"initiatorId,omitempty" yaml:"initiatorId,omitempty"`
 	State        `yaml:",inline"`
 	Counts       map[string]int64            `json:"counts" yaml:"counts"`
 	ApprovalMode string                      `json:"approvalMode" yaml:"approvalMode"`
@@ -206,6 +210,7 @@ type AccountDeletionApprovalSpec struct {
 	RequestID string `json:"requestId" yaml:"requestId"`
 }
 type AccountDeletionApprovalStatus struct {
+	InitiatorID     string `json:"initiatorId,omitempty" yaml:"initiatorId,omitempty"`
 	State           `yaml:",inline"`
 	UserID          string    `json:"userId" yaml:"userId"`
 	AuthenticatedAt time.Time `json:"authenticatedAt" yaml:"authenticatedAt"`
@@ -218,6 +223,7 @@ type AccountPurgeTombstoneSpec struct {
 	Reference       string          `json:"reference,omitempty" yaml:"reference,omitempty"`
 }
 type AccountPurgeTombstoneStatus struct {
+	InitiatorID string `json:"initiatorId,omitempty" yaml:"initiatorId,omitempty"`
 	State       `yaml:",inline"`
 	ApproverIDs []string         `json:"approverIds" yaml:"approverIds"`
 	Counts      map[string]int64 `json:"counts" yaml:"counts"`
@@ -225,6 +231,7 @@ type AccountPurgeTombstoneStatus struct {
 type SystemActivitySpec struct {
 }
 type SystemActivityStatus struct {
+	InitiatorID     string `json:"initiatorId,omitempty" yaml:"initiatorId,omitempty"`
 	State           `yaml:",inline"`
 	TargetAccountID model.AccountID    `json:"targetAccountId,omitempty" yaml:"targetAccountId,omitempty"`
 	Kind            string             `json:"kind" yaml:"kind"`
@@ -344,6 +351,7 @@ func init() {
 		{GoName: "ExpiresAt", Domain: "expires_at", Name: "expiresAt", Section: "status", Create: false, Patch: false},
 	})
 	register(model.ImpactPreview{}, "impact-previews", ImpactPreviewSpec{}, ImpactPreviewStatus{}, []manifest.Scope{manifest.ScopeSystem}, []Field{
+		{GoName: "ActorID", Domain: "actor_id", Name: "initiatorId", Section: "status"},
 		{GoName: "TargetAccountID", Domain: "account_id", Name: "targetAccountId", Section: "spec", Create: false, Patch: false},
 		{GoName: "TargetID", Domain: "target_id", Name: "targetId", Section: "spec", Create: false, Patch: false},
 		{GoName: "Operation", Domain: "operation", Name: "operation", Section: "spec", Create: false, Patch: false},
@@ -353,6 +361,7 @@ func init() {
 		{GoName: "ConsumedAt", Domain: "consumed_at", Name: "consumedAt", Section: "status", Create: false, Patch: false},
 	})
 	register(model.OwnerRecovery{}, "owner-recoveries", OwnerRecoverySpec{}, OwnerRecoveryStatus{}, []manifest.Scope{manifest.ScopeSystem}, []Field{
+		{GoName: "ActorID", Domain: "actor_id", Name: "initiatorId", Section: "status"},
 		{GoName: "TargetAccountID", Domain: "account_id", Name: "targetAccountId", Section: "spec", Create: false, Patch: false},
 		{GoName: "PreviousMembershipID", Domain: "previous_membership_id", Name: "previousMembershipId", Section: "spec", Create: false, Patch: false},
 		{GoName: "ReplacementEmail", Domain: "replacement_email", Name: "replacementEmail", Section: "spec", Create: false, Patch: false},
@@ -365,6 +374,7 @@ func init() {
 		{GoName: "ExpiresAt", Domain: "expires_at", Name: "expiresAt", Section: "status", Create: false, Patch: false},
 	})
 	register(model.StepUpAuthorization{}, "step-up-authorizations", StepUpAuthorizationSpec{}, StepUpAuthorizationStatus{}, []manifest.Scope{manifest.ScopeSystem}, []Field{
+		{GoName: "ActorID", Domain: "actor_id", Name: "initiatorId", Section: "status"},
 		{GoName: "TargetAccountID", Domain: "account_id", Name: "targetAccountId", Section: "spec", Create: false, Patch: false},
 		{GoName: "Action", Domain: "action", Name: "action", Section: "spec", Create: false, Patch: false},
 		{GoName: "AuthenticatedAt", Domain: "authenticated_at", Name: "authenticatedAt", Section: "status", Create: false, Patch: false},
@@ -373,6 +383,7 @@ func init() {
 		{GoName: "ConsumedAt", Domain: "consumed_at", Name: "consumedAt", Section: "status", Create: false, Patch: false},
 	})
 	register(model.AccountDeletionRequest{}, "deletion-requests", AccountDeletionRequestSpec{}, AccountDeletionRequestStatus{}, []manifest.Scope{manifest.ScopeSystem}, []Field{
+		{GoName: "ActorID", Domain: "actor_id", Name: "initiatorId", Section: "status"},
 		{GoName: "TargetAccountID", Domain: "account_id", Name: "targetAccountId", Section: "spec", Create: false, Patch: false},
 		{GoName: "Reason", Domain: "reason", Name: "reason", Section: "spec", Create: false, Patch: false},
 		{GoName: "Reference", Domain: "reference", Name: "reference", Section: "spec", Create: false, Patch: false},
@@ -386,12 +397,14 @@ func init() {
 		{GoName: "Approvals", Domain: "approvals", Name: "approvals", Section: "status", Create: false, Patch: false},
 	})
 	register(model.AccountDeletionApproval{}, "deletion-approvals", AccountDeletionApprovalSpec{}, AccountDeletionApprovalStatus{}, []manifest.Scope{manifest.ScopeSystem}, []Field{
+		{GoName: "ActorID", Domain: "actor_id", Name: "initiatorId", Section: "status"},
 		{GoName: "RequestID", Domain: "request_id", Name: "requestId", Section: "spec", Create: false, Patch: false},
 		{GoName: "UserID", Domain: "user_id", Name: "userId", Section: "status", Create: false, Patch: false},
 		{GoName: "AuthenticatedAt", Domain: "authenticated_at", Name: "authenticatedAt", Section: "status", Create: false, Patch: false},
 		{GoName: "AssuranceMethod", Domain: "assurance_method", Name: "assuranceMethod", Section: "status", Create: false, Patch: false},
 	})
 	register(model.AccountPurgeTombstone{}, "purge-tombstones", AccountPurgeTombstoneSpec{}, AccountPurgeTombstoneStatus{}, []manifest.Scope{manifest.ScopeSystem}, []Field{
+		{GoName: "ActorID", Domain: "actor_id", Name: "initiatorId", Section: "status"},
 		{GoName: "TargetAccountID", Domain: "account_id", Name: "targetAccountId", Section: "spec", Create: false, Patch: false},
 		{GoName: "RequestID", Domain: "request_id", Name: "requestId", Section: "spec", Create: false, Patch: false},
 		{GoName: "Reason", Domain: "reason", Name: "reason", Section: "spec", Create: false, Patch: false},
@@ -400,6 +413,7 @@ func init() {
 		{GoName: "Counts", Domain: "counts", Name: "counts", Section: "status", Create: false, Patch: false},
 	})
 	register(model.SystemActivity{}, "system-activity", SystemActivitySpec{}, SystemActivityStatus{}, []manifest.Scope{manifest.ScopeSystem}, []Field{
+		{GoName: "ActorID", Domain: "actor_id", Name: "initiatorId", Section: "status"},
 		{GoName: "TargetAccountID", Domain: "account_id", Name: "targetAccountId", Section: "status", Create: false, Patch: false},
 		{GoName: "Kind", Domain: "kind", Name: "kind", Section: "status", Create: false, Patch: false},
 		{GoName: "Action", Domain: "action", Name: "action", Section: "status", Create: false, Patch: false},

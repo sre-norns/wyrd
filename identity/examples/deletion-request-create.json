@@ -1,0 +1,8 @@
+{
+  "operation": "purge",
+  "preview_id": "preview-from-the-current-account-version",
+  "step_up_id": "recent-password-step-up",
+  "confirmation": "target-account-uid",
+  "recovery_acknowledged": true,
+  "reason": "Approved account retirement"
+}

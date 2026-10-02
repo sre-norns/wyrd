@@ -85,6 +85,7 @@ func (s *Service) SetSystemEntitlement(ctx context.Context, email, status string
 		if err != nil && err != gorm.ErrRecordNotFound {
 			return err
 		}
+		row.LastModifiedBy = publicActor(mutationActor(ctx))
 		row.UserID, row.Status, row.Revision, row.UpdatedAt = u.ID, status, row.Revision+1, time.Now().UTC()
 		if err := tx.Save(&row).Error; err != nil {
 			return err
@@ -93,7 +94,7 @@ func (s *Service) SetSystemEntitlement(ctx context.Context, email, status string
 			return err
 		}
 		if status == "revoked" {
-			return tx.Model(&e.Session{}).Where("user_id = ? AND scope = 'system'", u.ID).Updates(map[string]any{"status": "revoked", "updated_at": row.UpdatedAt, "revision": gorm.Expr("revision + 1")}).Error
+			return tx.Model(&e.Session{}).Where("user_id = ? AND scope = 'system'", u.ID).Updates(resourceMutation(ctx, map[string]any{"status": "revoked", "updated_at": row.UpdatedAt, "revision": gorm.Expr("revision + 1")})).Error
 		}
 		return nil
 	})

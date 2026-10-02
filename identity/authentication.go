@@ -156,6 +156,7 @@ func (s *Service) ProvisionUser(ctx context.Context, email, password string, adm
 			return nil
 		}
 		u := user{ID: newID(), Email: strings.ToLower(email), Password: hash, SystemAdmin: admin, Status: "active", Revision: 1}
+		u.LastModifiedBy = publicActor(mutationActor(ctx))
 		if err := tx.Create(&u).Error; err != nil {
 			return err
 		}
@@ -163,7 +164,7 @@ func (s *Service) ProvisionUser(ctx context.Context, email, password string, adm
 			return err
 		}
 		if admin {
-			return tx.Create(&e.SystemEntitlement{UserID: u.ID, Status: "active", Revision: 1, UpdatedAt: time.Now().UTC()}).Error
+			return tx.Create(&e.SystemEntitlement{LastModifiedBy: publicActor(mutationActor(ctx)), UserID: u.ID, Status: "active", Revision: 1, UpdatedAt: time.Now().UTC()}).Error
 		}
 		p := e.Principal{Type: "user", Scope: e.ScopeAccount, UserID: u.ID}
 		ctx = WithPrincipal(ctx, p)

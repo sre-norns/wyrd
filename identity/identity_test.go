@@ -202,6 +202,8 @@ func TestPurgeRegisteredManifestKindRollsBackHookFailure(t *testing.T) {
 	check(t, db.AutoMigrate(&Probe{}))
 	account := e.Account{Resource: e.Resource{ID: "purge-account", Name: "purge", Revision: 1, Status: "deletion-pending"}}
 	check(t, db.Create(&account).Error)
+	check(t, db.Create(&idempotencyRecord{ID: "purged-replay", AccountID: "purge-account", Body: []byte(`{"resource":{}}`)}).Error)
+	check(t, db.Create(&idempotencyRecord{ID: "other-replay", AccountID: "other-account"}).Error)
 	probe := Probe{ObjectMeta: manifest.ObjectMeta{UID: "ff193ec4-4057-4c51-a0e7-56e54bac2270", Name: "owned", Account: "purge-account", Project: "project"}}
 	check(t, db.Create(&probe).Error)
 	request := e.AccountDeletionRequest{SystemRecord: e.SystemRecord{ID: "request", Status: "approved", Revision: 1}, TargetAccountID: "purge-account", ApprovalMode: "single", ExecuteAfter: time.Now().Add(-time.Minute)}
@@ -218,6 +220,10 @@ func TestPurgeRegisteredManifestKindRollsBackHookFailure(t *testing.T) {
 	if n != 1 || hookCalls != 1 {
 		t.Fatalf("hook rollback: rows=%d calls=%d", n, hookCalls)
 	}
+	check(t, db.Model(&idempotencyRecord{}).Count(&n).Error)
+	if n != 2 {
+		t.Fatalf("failed purge deleted replay records: %d", n)
+	}
 	failHook = false
 	check(t, db.Model(&request).Updates(map[string]any{"status": "approved", "execute_after": time.Now().Add(-time.Minute)}).Error)
 	done, err := service.ExecuteDuePurge(context.Background())
@@ -228,5 +234,11 @@ func TestPurgeRegisteredManifestKindRollsBackHookFailure(t *testing.T) {
 	check(t, db.Model(&Probe{}).Count(&n).Error)
 	if n != 0 || hookCalls != 2 {
 		t.Fatalf("purge: rows=%d calls=%d", n, hookCalls)
+	}
+	var replay idempotencyRecord
+	check(t, db.First(&replay).Error)
+	check(t, db.Model(&idempotencyRecord{}).Count(&n).Error)
+	if n != 1 || replay.ID != "other-replay" {
+		t.Fatalf("purge crossed replay ownership: %+v (%d)", replay, n)
 	}
 }

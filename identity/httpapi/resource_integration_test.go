@@ -170,7 +170,7 @@ func TestCanonicalHTTPWorkflow(t *testing.T) {
 	profile.DisplayName = nil
 	profile, err = c.PersonalProfile().Update(ctx, profile)
 	must(err)
-	if profile.DisplayName != nil {
+	if profile.DisplayName != nil || profile.LastModifiedBy.UserID != user.ID {
 		t.Fatal("null profile edit lost")
 	}
 	// A different content type cannot bypass the canonical parser.

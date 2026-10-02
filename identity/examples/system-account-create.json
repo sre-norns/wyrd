@@ -1,0 +1,7 @@
+{
+  "name": "Disposable",
+  "description": "Account provisioned by a system operator",
+  "owner_email": "owner@example.test",
+  "delivery": "manual",
+  "reason": "test lifecycle"
+}

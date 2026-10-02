@@ -209,6 +209,7 @@ func (s *Service) JoinInvitation(ctx context.Context, cookie string, form url.Va
 				return problem(409, "account-exists", "This email now has a user account. Log in with its existing password.")
 			}
 			u = user{ID: newID(), Email: i.Email, Password: before.Password, Status: "active"}
+			u.LastModifiedBy = e.ResourceActor{Type: "user", UserID: u.ID}
 			if err = tx.Create(&u).Error; err != nil {
 				return err
 			}
@@ -364,6 +365,7 @@ func (s *Service) joinWithProvider(ctx context.Context, cookie string) (redirect
 				return err
 			}
 			u = user{ID: newID(), Email: i.Email, Status: "active", Revision: 1}
+			u.LastModifiedBy = e.ResourceActor{Type: "user", UserID: u.ID}
 			if err = tx.Create(&u).Error; err != nil {
 				return err
 			}

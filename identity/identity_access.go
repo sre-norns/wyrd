@@ -171,6 +171,7 @@ func (s *Service) CompleteIdentityLink(ctx context.Context, kind, token, passwor
 				return err
 			}
 			u = user{ID: newID(), Email: link.Email, Password: hash, Status: "active"}
+			u.LastModifiedBy = e.ResourceActor{Type: "user", UserID: u.ID}
 			if err := tx.Create(&u).Error; err != nil {
 				return err
 			}
@@ -201,7 +202,7 @@ func (s *Service) CompleteIdentityLink(ctx context.Context, kind, token, passwor
 			if err := activateEmailMethod(tx, u.ID); err != nil {
 				return err
 			}
-			if err := tx.Model(&e.Session{}).Where("user_id = ? AND status = 'active'", u.ID).Updates(map[string]any{"status": "revoked", "revision": gorm.Expr("revision + 1"), "updated_at": time.Now().UTC()}).Error; err != nil {
+			if err := tx.Model(&e.Session{}).Where("user_id = ? AND status = 'active'", u.ID).Updates(resourceMutation(WithPrincipal(ctx, e.Principal{Type: "user", UserID: u.ID}), map[string]any{"status": "revoked", "revision": gorm.Expr("revision + 1"), "updated_at": time.Now().UTC()})).Error; err != nil {
 				return err
 			}
 			if err := tx.Where("user_id = ?", u.ID).Delete(&oauthGrant{}).Error; err != nil {

@@ -126,8 +126,7 @@ func consumePreview(ctx context.Context, db *gorm.DB, account e.AccountID, targe
 	}
 	preview.ConsumedAt = &t
 	preview.Status = "consumed"
-	preview.Revision++
-	preview.UpdatedAt = t
+	touchSystem(ctx, &preview.SystemRecord, t)
 	return preview, db.Save(&preview).Error
 }
 
@@ -198,8 +197,8 @@ func (s *Service) ChangeAccountLifecycle(ctx context.Context, id e.AccountID, ac
 		}
 		account.Status = next
 		account.Revision++
+		account.Actor = mutationActor(ctx)
 		account.UpdatedAt = t
-		account.Actor = principal(ctx)
 		account.LifecycleReason = action.Reason
 		account.LifecycleAt = &t
 		if err := tx.Save(&account).Error; err != nil {
@@ -207,7 +206,7 @@ func (s *Service) ChangeAccountLifecycle(ctx context.Context, id e.AccountID, ac
 		}
 		if next == "archived" {
 			for _, table := range []string{"sessions", "agent_identity_tokens"} {
-				if err := tx.Table(table).Where("account_id = ? AND status = 'active'", id).Updates(map[string]any{"status": "revoked", "revision": gorm.Expr("revision + 1"), "updated_at": t}).Error; err != nil {
+				if err := tx.Table(table).Where("account_id = ? AND status = 'active'", id).Updates(resourceMutation(ctx, map[string]any{"status": "revoked", "revision": gorm.Expr("revision + 1"), "updated_at": t})).Error; err != nil {
 					return err
 				}
 			}
@@ -243,12 +242,13 @@ func revokeMembership(ctx context.Context, tx *gorm.DB, member *e.AccountMembers
 		return err
 	}
 	for _, table := range []string{"sessions", "project_memberships"} {
-		if err := tx.Table(table).Where("account_id = ? AND user_id = ? AND status <> 'revoked'", member.AccountID, member.UserID).Updates(map[string]any{"status": "revoked", "revision": gorm.Expr("revision + 1"), "updated_at": t}).Error; err != nil {
+		if err := tx.Table(table).Where("account_id = ? AND user_id = ? AND status <> 'revoked'", member.AccountID, member.UserID).Updates(resourceMutation(ctx, map[string]any{"status": "revoked", "revision": gorm.Expr("revision + 1"), "updated_at": t})).Error; err != nil {
 			return err
 		}
 	}
 	member.Status = "revoked"
 	member.Revision++
+	member.Actor = mutationActor(ctx)
 	member.UpdatedAt = t
 	return tx.Save(member).Error
 }
@@ -332,7 +332,7 @@ func (s *Service) CreateOwnerRecovery(ctx context.Context, account e.AccountID, 
 		}
 		invitation, err := newInvitation(ctx, tx, s.config, e.AccountInvitation{Resource: e.Resource{AccountID: account}, Email: email, Role: "owner", Delivery: action.Delivery, Recovery: true})
 		if err != nil {
-			return err
+			return remapProblemField(err, "email", "replacement_email")
 		}
 		out = e.OwnerRecovery{SystemRecord: newSystemRecord(ctx, "pending"), TargetAccountID: account, PreviousMembershipID: previous.ID, InvitationID: invitation.ID, ReplacementEmail: email, InvitationStatus: "pending", ExpiresAt: invitation.ExpiresAt, Reason: action.Reason, Reference: action.Reference, InvitationToken: invitation.Token, EmailDelivery: invitation.EmailDelivery}
 		if err := tx.Create(&out).Error; err != nil {
@@ -416,8 +416,7 @@ func (s *Service) CompleteOwnerRecovery(ctx context.Context, id string, action e
 			return err
 		}
 		out.Status = "completed"
-		out.Revision++
-		out.UpdatedAt = time.Now().UTC()
+		touchSystem(ctx, &out.SystemRecord, time.Now().UTC())
 		if err := tx.Save(&out).Error; err != nil {
 			return err
 		}

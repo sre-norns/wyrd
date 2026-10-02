@@ -10,15 +10,16 @@ import (
 )
 
 type userSignInMethod struct {
-	ID         string  `gorm:"primaryKey;size:36"`
-	UserID     string  `gorm:"not null;index;size:36"`
-	Method     string  `gorm:"not null;size:16"`
-	Subject    *string `gorm:"size:255"`
-	Status     string  `gorm:"not null;size:16"`
-	CreatedAt  time.Time
-	LastUsedAt *time.Time
-	RevokedAt  *time.Time
-	Revision   int64 `gorm:"not null;default:1"`
+	LastModifiedBy e.ResourceActor `gorm:"serializer:json;type:jsonb"`
+	ID             string          `gorm:"primaryKey;size:36"`
+	UserID         string          `gorm:"not null;index;size:36"`
+	Method         string          `gorm:"not null;size:16"`
+	Subject        *string         `gorm:"size:255"`
+	Status         string          `gorm:"not null;size:16"`
+	CreatedAt      time.Time
+	LastUsedAt     *time.Time
+	RevokedAt      *time.Time
+	Revision       int64 `gorm:"not null;default:1"`
 }
 
 type upstreamAuthTransaction struct {
@@ -80,7 +81,7 @@ func migrateSignInMethods(db *gorm.DB) error {
 }
 
 func activateEmailMethod(tx *gorm.DB, userID string) error {
-	return tx.Exec("INSERT INTO user_sign_in_methods (id, user_id, method, status, created_at, revision) VALUES (?, ?, 'email', 'active', clock_timestamp(), 1) ON CONFLICT (user_id, method) WHERE status = 'active' DO NOTHING", newID(), userID).Error
+	return tx.Exec("INSERT INTO user_sign_in_methods (id, user_id, method, status, created_at, revision, last_modified_by) VALUES (?, ?, 'email', 'active', clock_timestamp(), 1, ?) ON CONFLICT (user_id, method) WHERE status = 'active' DO NOTHING", newID(), userID, actorJSON(e.ResourceActor{Type: "user", UserID: userID})).Error
 }
 
 func methodName(authentication string) string {
@@ -108,7 +109,7 @@ func publicSignInMethod(m userSignInMethod, u user) e.SignInMethod {
 	if m.Method == e.SignInEmail && status == "active" && len(u.Password) == 0 {
 		status = "inactive"
 	}
-	return e.SignInMethod{ID: m.ID, Method: m.Method, Status: status, CreatedAt: m.CreatedAt, LastUsedAt: m.LastUsedAt, Revision: m.Revision}
+	return e.SignInMethod{LastModifiedBy: m.LastModifiedBy, ID: m.ID, Method: m.Method, Status: status, CreatedAt: m.CreatedAt, LastUsedAt: m.LastUsedAt, Revision: m.Revision}
 }
 
 func (s *signInMethodService) List(ctx context.Context) ([]e.SignInMethod, error) {
@@ -191,14 +192,14 @@ func (s *signInMethodService) Revoke(ctx context.Context, method e.SignInMethod)
 		if err != nil {
 			return err
 		}
-		result := tx.Model(&userSignInMethod{}).Where("id = ? AND revision = ? AND status = 'active'", row.ID, row.Revision).Updates(map[string]any{"status": "revoked", "revoked_at": t, "revision": row.Revision + 1})
+		result := tx.Model(&userSignInMethod{}).Where("id = ? AND revision = ? AND status = 'active'", row.ID, row.Revision).Updates(systemMutation(ctx, map[string]any{"status": "revoked", "revoked_at": t, "revision": row.Revision + 1}))
 		if result.Error != nil {
 			return result.Error
 		}
 		if result.RowsAffected != 1 {
 			return problem(412, "precondition-failed", "The resource has changed.")
 		}
-		if err := tx.Model(&e.Session{}).Where("user_id = ? AND status = 'active' AND authentication_method = ?", u.ID, row.Method).Updates(map[string]any{"status": "revoked", "revision": gorm.Expr("revision + 1"), "updated_at": t}).Error; err != nil {
+		if err := tx.Model(&e.Session{}).Where("user_id = ? AND status = 'active' AND authentication_method = ?", u.ID, row.Method).Updates(resourceMutation(ctx, map[string]any{"status": "revoked", "revision": gorm.Expr("revision + 1"), "updated_at": t})).Error; err != nil {
 			return err
 		}
 		// Pending authentication proofs from the provider cannot finish either.
@@ -208,6 +209,7 @@ func (s *signInMethodService) Revoke(ctx context.Context, method e.SignInMethod)
 		if err := metadataAudit(ctx, tx, &e.Resource{ID: row.ID, AccountID: principal(ctx).AccountID, Name: row.Method}, "revoke-sign-in-method"); err != nil {
 			return err
 		}
+		row.LastModifiedBy = publicActor(mutationActor(ctx))
 		row.Status, row.RevokedAt, row.Revision = "revoked", &t, row.Revision+1
 		out = publicSignInMethod(row, u)
 		return nil

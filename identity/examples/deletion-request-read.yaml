@@ -1,0 +1,38 @@
+apiVersion: identity.sre-norns.com/v1
+kind: deletion-requests
+metadata:
+  uid: deletion-request
+  name: deletion-request
+  version: 2
+spec:
+  targetAccountId: target-account-uid
+  reason: Approved account retirement
+status:
+  phase: approved
+  initiatorId: requesting-operator
+  lastModifiedBy:
+    type: user
+    userId: independent-approver
+  counts:
+    stored_resources: 12
+  approvalMode: dual
+  executeAfter: 2026-10-03T00:00:00Z
+  attempts: 0
+  approvals:
+    - apiVersion: identity.sre-norns.com/v1
+      kind: deletion-approvals
+      metadata:
+        uid: independent-approval
+        name: independent-approval
+        version: 1
+      spec:
+        requestId: deletion-request
+      status:
+        phase: approved
+        initiatorId: independent-approver
+        lastModifiedBy:
+          type: user
+          userId: independent-approver
+        userId: independent-approver
+        authenticatedAt: 2026-10-02T00:00:00Z
+        assuranceMethod: password

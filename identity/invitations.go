@@ -195,7 +195,7 @@ func revokeInvitation(ctx context.Context, tx *gorm.DB, i *e.AccountInvitation) 
 	if err := save(ctx, tx, i); err != nil {
 		return err
 	}
-	return tx.Model(&e.OwnerRecovery{}).Where("invitation_id = ? AND status = 'pending'", i.ID).Updates(map[string]any{"status": "cancelled", "revision": gorm.Expr("revision + 1"), "updated_at": time.Now().UTC()}).Error
+	return tx.Model(&e.OwnerRecovery{}).Where("invitation_id = ? AND status = 'pending'", i.ID).Updates(systemMutation(ctx, map[string]any{"status": "cancelled", "revision": gorm.Expr("revision + 1"), "updated_at": time.Now().UTC()})).Error
 }
 
 func (s *Service) RequestInvitationDelivery(ctx context.Context, id string, action e.SystemAction) (out e.AccountInvitation, err error) {

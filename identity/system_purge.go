@@ -58,8 +58,7 @@ func consumeStepUp(ctx context.Context, tx *gorm.DB, account e.AccountID, action
 	}
 	out.ConsumedAt = &t
 	out.Status = "consumed"
-	out.Revision++
-	out.UpdatedAt = t
+	touchSystem(ctx, &out.SystemRecord, t)
 	err = tx.Save(&out).Error
 	return
 }
@@ -113,6 +112,7 @@ func (s *Service) RequestAccountDeletion(ctx context.Context, account e.AccountI
 		}
 		a.Status = "deletion-pending"
 		a.Revision++
+		a.Actor = mutationActor(ctx)
 		a.UpdatedAt = time.Now().UTC()
 		if err := tx.Save(&a).Error; err != nil {
 			return err
@@ -206,8 +206,7 @@ func (s *Service) ApproveAccountDeletion(ctx context.Context, id string, action 
 			return err
 		}
 		out.Status = "approved"
-		out.Revision++
-		out.UpdatedAt = time.Now().UTC()
+		touchSystem(ctx, &out.SystemRecord, time.Now().UTC())
 		if err := tx.Save(&out).Error; err != nil {
 			return err
 		}
@@ -259,6 +258,7 @@ func (s *Service) ChangeDeletionRequest(ctx context.Context, id string, action e
 			}
 			account.Status = "archived"
 			account.Revision++
+			account.Actor = mutationActor(ctx)
 			account.UpdatedAt = time.Now().UTC()
 			if err := tx.Save(&account).Error; err != nil {
 				return err
@@ -268,8 +268,7 @@ func (s *Service) ChangeDeletionRequest(ctx context.Context, id string, action e
 		} else {
 			return invalid("Use cancel or retry.")
 		}
-		out.Revision++
-		out.UpdatedAt = time.Now().UTC()
+		touchSystem(ctx, &out.SystemRecord, time.Now().UTC())
 		if err := tx.Save(&out).Error; err != nil {
 			return err
 		}
@@ -325,6 +324,7 @@ func (s *Service) ExecuteDuePurge(ctx context.Context) (executed bool, err error
 			}
 			claimed.Status = "executing"
 			claimed.Attempts++
+			touchSystem(ctx, &claimed.SystemRecord, time.Now().UTC())
 			if err := tx.Save(&claimed).Error; err != nil {
 				return err
 			}
@@ -382,13 +382,14 @@ func (s *Service) ExecuteDuePurge(ctx context.Context) (executed bool, err error
 			claimed.CompletedAt = &t
 			claimed.UpdatedAt = t
 			claimed.Revision++
+			claimed.LastModifiedBy = publicActor(mutationActor(ctx))
 			if err := tx.Save(&claimed).Error; err != nil {
 				return err
 			}
 			return recordSystemAudit(ctx, tx, claimed.TargetAccountID, claimed.ID, "execute-account-deletion", "succeeded", e.SystemAction{Reason: claimed.Reason, Reference: claimed.Reference}, false)
 		})
 		if executionError != nil {
-			if err := tx.Model(&e.AccountDeletionRequest{}).Where("id = ?", claimed.ID).Updates(map[string]any{"status": "failed", "failure_code": safeSystemFailure(executionError), "attempts": gorm.Expr("attempts + 1"), "revision": gorm.Expr("revision + 1"), "updated_at": time.Now().UTC()}).Error; err != nil {
+			if err := tx.Model(&e.AccountDeletionRequest{}).Where("id = ?", claimed.ID).Updates(systemMutation(ctx, map[string]any{"status": "failed", "failure_code": safeSystemFailure(executionError), "attempts": gorm.Expr("attempts + 1"), "revision": gorm.Expr("revision + 1"), "updated_at": time.Now().UTC()})).Error; err != nil {
 				return err
 			}
 			return recordSystemAudit(ctx, tx, claimed.TargetAccountID, claimed.ID, "execute-account-deletion", safeSystemFailure(executionError), e.SystemAction{}, false)
