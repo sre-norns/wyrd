@@ -31,7 +31,8 @@ func writeProblem(ctx *gin.Context, err error) {
 		fields := map[string]string{}
 		for key, value := range domain.Fields {
 			if !ctx.GetBool("identityCommandInput") {
-				key = resource.FieldPath(key)
+				value, _ := ctx.Get(resourceValueKey)
+				key = resource.FieldPathFor(value, key)
 			}
 			fields[key] = value
 		}

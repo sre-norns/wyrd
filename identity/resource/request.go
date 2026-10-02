@@ -262,6 +262,24 @@ func FieldPath(domain string) string {
 	return domain
 }
 
+// FieldPathFor resolves a validation field against the resource being edited.
+// A domain field can be writable on one kind and observed on another, so a
+// registry-wide first match cannot select the correct public section.
+func FieldPathFor(value any, domain string) string {
+	if d, ok := definitions[base(reflect.TypeOf(value))]; ok {
+		for _, field := range d.Fields {
+			if field.Domain == domain {
+				section := field.Section
+				if section == "input" {
+					section = "spec"
+				}
+				return section + "." + field.Name
+			}
+		}
+	}
+	return FieldPath(domain)
+}
+
 // DecodeDocument reads a create document or a server read document for CLI
 // apply. Read-only fields are validated when present and then omitted from the
 // returned writable patch; omission and explicit null are preserved.
