@@ -1,0 +1,6 @@
+{
+  "apiVersion": "identity.sre-norns.com/v1",
+  "kind": "projects",
+  "metadata": {"name": "monitoring", "labels": {"team_name": "sre"}},
+  "spec": {"description": "Service monitoring", "target": "production"}
+}

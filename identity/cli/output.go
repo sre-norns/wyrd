@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sre-norns/wyrd/identity/model"
+	resourcewire "github.com/sre-norns/wyrd/identity/resource"
 	"github.com/sre-norns/wyrd/pkg/manifest"
 	"gopkg.in/yaml.v3"
 )
@@ -62,6 +63,13 @@ func (o Output) Structured() bool { return o.Format == FormatYAML || o.Format ==
 // Encode prints value as a document in the output format. YAML is the JSON
 // document re-rendered, so its keys are the wire's and can be applied back.
 func (o Output) Encode(value any) error {
+	if resourcewire.Contains(value) {
+		var err error
+		value, err = resourcewire.Encode(value)
+		if err != nil {
+			return err
+		}
+	}
 	switch o.Format {
 	case FormatJSON:
 		encoder := json.NewEncoder(o.stdout())
@@ -195,6 +203,9 @@ func RenderUpsert[T any](out Output, resource T, created bool, err error) error 
 		return err
 	}
 	if out.Structured() {
+		if resourcewire.Contains(resource) {
+			return out.EncodeResult(resource)
+		}
 		return out.Encode(resource)
 	}
 	if created {
@@ -437,4 +448,14 @@ func ShortDuration(d time.Duration) string {
 	default:
 		return fmt.Sprintf("%dd", int(d.Hours())/24)
 	}
+}
+
+// EncodeResult prints an explicit mutation result, including a one-time token
+// when issued. Ordinary Encode/RenderFound never expose operation credentials.
+func (o Output) EncodeResult(value any) error {
+	wire, err := resourcewire.EncodeResult(value)
+	if err != nil {
+		return err
+	}
+	return o.Encode(wire)
 }

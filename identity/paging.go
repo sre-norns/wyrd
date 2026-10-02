@@ -33,6 +33,14 @@ func pageError(err error) error {
 	case errors.Is(err, dbstore.ErrConflictingPagination):
 		return &Problem{Status: 400, Code: "offset-unsupported", Detail: "Lists page by cursor only."}
 	}
+	var status interface {
+		error
+		HTTPStatus() int
+		ProblemCode() string
+	}
+	if errors.As(err, &status) {
+		return &Problem{Status: status.HTTPStatus(), Code: status.ProblemCode(), Detail: status.Error()}
+	}
 	return err
 }
 

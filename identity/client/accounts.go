@@ -62,7 +62,7 @@ func (c *accountInvitationsClient) Get(ctx context.Context, id model.AccountInvi
 }
 
 func (c *accountInvitationsClient) Create(ctx context.Context, accountID model.AccountID, invitation model.AccountInvitation) (resource model.AccountInvitation, commError error) {
-	return Resource[model.AccountInvitation](c.Client).Post(ctx, ResourcePath("v1", "accounts", string(accountID), "invitations"), map[string]any{"email": invitation.Email, "role": invitation.Role, "delivery": invitation.Delivery})
+	return Resource[model.AccountInvitation](c.Client).Post(ctx, ResourcePath("v1", "accounts", string(accountID), "invitations"), invitation)
 }
 
 func (c *accountInvitationsClient) CreateOrUpdate(ctx context.Context, invitation model.AccountInvitation) (resource model.AccountInvitation, created bool, commError error) {

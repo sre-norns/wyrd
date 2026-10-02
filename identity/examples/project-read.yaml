@@ -1,0 +1,18 @@
+apiVersion: identity.sre-norns.com/v1
+kind: projects
+metadata:
+  uid: 64251f17-64be-4fcf-84fd-f41c8d7f0afc
+  name: monitoring
+  account: 3393b8ef-7d36-41cb-8498-2a41b04c9dde
+  version: 4
+  labels:
+    team_name: sre
+spec:
+  description: Service monitoring
+  target: production
+status:
+  phase: active
+  authority: account-administrator
+  lastModifiedBy:
+    type: user
+    userId: 6a741a75-5aa1-4349-b34c-1893a694f054

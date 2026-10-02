@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sre-norns/wyrd/identity/model"
+	"github.com/sre-norns/wyrd/identity/resource"
 	"github.com/sre-norns/wyrd/pkg/manifest"
 )
 
@@ -55,7 +56,7 @@ type Problem struct {
 	Code       string            `json:"code"`
 	Detail     string            `json:"detail"`
 	Instance   string            `json:"instance,omitempty"`
-	RequestID  string            `json:"request_id,omitempty"`
+	RequestID  string            `json:"requestId,omitempty"`
 	Fields     map[string]string `json:"fields,omitempty"`
 	RetryAfter string            `json:"-"`
 }
@@ -90,6 +91,9 @@ func SearchValues(query manifest.SearchQuery) (url.Values, error) {
 		return nil, &Problem{Status: http.StatusBadRequest, Code: "offset-unsupported", Detail: "Lists page by cursor only: pass the previous page's next as cursor."}
 	}
 	values := url.Values{}
+	if query.Fields != nil && !query.Fields.Empty() {
+		values.Set("fields", query.Fields.String())
+	}
 	if query.Selector != nil && !query.Selector.Empty() {
 		values.Set("labels", query.Selector.String())
 	}
@@ -231,11 +235,17 @@ func Resource[T any](client *Client) ResourceClient[T] { return ResourceClient[T
 
 // Request sends one request and decodes the response. A 204 decodes nothing.
 func (r ResourceClient[T]) Request(ctx context.Context, method, path string, query url.Values, body any) (value T, status int, err error) {
+	if resource.IsResource(body) {
+		body, err = resource.Input(body, method == http.MethodPatch)
+		if err != nil {
+			return value, 0, err
+		}
+	}
 	data, status, _, err := r.client.Exchange(ctx, method, path, query, body, false)
 	if err != nil || status == http.StatusNoContent {
 		return value, status, err
 	}
-	if err = json.Unmarshal(data, &value); err != nil {
+	if err = resource.Decode(data, &value); err != nil {
 		return value, status, fmt.Errorf("decode response: %w", err)
 	}
 	return
@@ -271,7 +281,7 @@ func (r ResourceClient[T]) ListValues(ctx context.Context, path string, values u
 	}
 	data, _, _, err := r.client.Exchange(ctx, http.MethodGet, path, values, nil, false)
 	if err == nil {
-		err = json.Unmarshal(data, &envelope)
+		err = resource.Decode(data, &envelope)
 	}
 	return envelope.Items, envelope.Page, err
 }
@@ -309,6 +319,27 @@ func (r ResourceClient[T]) PatchFields(ctx context.Context, path string, value T
 	options := Options(ctx)
 	if options.IfMatch == "" && meta.Metadata().Revision > 0 {
 		options.IfMatch = fmt.Sprintf("\"%d\"", meta.Metadata().Revision)
+	}
+	if resource.IsResource(value) {
+		var body any = options.Patch
+		if options.Patch == nil {
+			// Credential revocation remains available through the existing Go service
+			// method; the wire always uses an explicit command.
+			switch any(value).(type) {
+			case model.Session, model.AgentIdentityToken, model.AccountInvitation:
+				if meta.Metadata().Status != "revoked" {
+					return out, false, errors.New("credential updates require revoke")
+				}
+				body, err = resource.Command(value, "revoke")
+			default:
+				body, err = resource.Input(value, true)
+			}
+			if err != nil {
+				return out, false, err
+			}
+		}
+		out, status, err := r.Request(WithRequestOptions(ctx, options), http.MethodPatch, path, nil, body)
+		return out, err == nil && status == http.StatusCreated, err
 	}
 	fields := options.Patch
 	if fields == nil {
@@ -373,4 +404,21 @@ func (c *Client) oauth(ctx context.Context, method, path string, form url.Values
 		return nil, fmt.Errorf("decode OAuth response: %w", err)
 	}
 	return result, nil
+}
+
+// Transition sends a lifecycle command with the version read by the caller.
+func (r ResourceClient[T]) Transition(ctx context.Context, path string, value T, operation string) (T, error) {
+	var zero T
+	body, err := resource.Command(value, operation)
+	if err != nil {
+		return zero, err
+	}
+	options := Options(ctx)
+	if options.IfMatch == "" {
+		if meta, ok := any(&value).(interface{ Metadata() *model.Resource }); ok && meta.Metadata().Revision > 0 {
+			options.IfMatch = fmt.Sprintf("\"%d\"", meta.Metadata().Revision)
+		}
+	}
+	out, _, err := r.Request(WithRequestOptions(ctx, options), http.MethodPatch, path, nil, body)
+	return out, err
 }

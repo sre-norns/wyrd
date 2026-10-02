@@ -1,0 +1,302 @@
+[
+  {
+    "method": "GET",
+    "path": "/v1/account-invitations/:id",
+    "response": "AccountInvitation",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/account-memberships/:id",
+    "response": "AccountMembership",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/accounts",
+    "response": "Account",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/accounts/:id",
+    "response": "Account",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/accounts/:id/agent-identities",
+    "response": "AgentIdentity",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/accounts/:id/invitations",
+    "response": "AccountInvitation",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/accounts/:id/memberships",
+    "response": "AccountMembership",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/accounts/:id/projects",
+    "response": "Project",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/agent-authorizations/:id",
+    "response": "AgentAuthorization",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/agent-identities/:id",
+    "response": "AgentIdentity",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/agent-identities/:id/project-authorizations",
+    "response": "query:AgentProjectAuthorizations",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/agent-identities/:id/tokens",
+    "response": "AgentIdentityToken",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/agent-identity-tokens/:id",
+    "response": "AgentIdentityToken",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/principal",
+    "response": "query:Principal",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/profile",
+    "response": "PersonalProfile",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/profile/accounts",
+    "response": "query:ProfileAccount",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/profile/sign-in-methods",
+    "response": "SignInMethod",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/profile/sign-in-methods/:id",
+    "response": "SignInMethod",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/project-memberships/:id",
+    "response": "ProjectMembership",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/projects",
+    "response": "Project",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/projects/:id",
+    "response": "Project",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/projects/:id/agent-authorizations",
+    "response": "AgentAuthorization",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/projects/:id/agent-candidates",
+    "response": "query:ProjectAgentCandidates",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/projects/:id/member-candidates",
+    "response": "query:ProjectMemberCandidates",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/projects/:id/memberships",
+    "response": "ProjectMembership",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/service-configuration",
+    "response": "query:ServiceConfiguration",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/sessions",
+    "response": "Session",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/sessions/:id",
+    "response": "Session",
+    "input": "none"
+  },
+  {
+    "method": "PATCH",
+    "path": "/v1/account-invitations/:id",
+    "response": "AccountInvitation",
+    "input": "patch/command"
+  },
+  {
+    "method": "PATCH",
+    "path": "/v1/account-memberships/:id",
+    "response": "AccountMembership",
+    "input": "patch/command"
+  },
+  {
+    "method": "PATCH",
+    "path": "/v1/accounts/:id",
+    "response": "Account|SystemAccount",
+    "input": "patch/command"
+  },
+  {
+    "method": "PATCH",
+    "path": "/v1/agent-authorizations/:id",
+    "response": "AgentAuthorization",
+    "input": "patch/command"
+  },
+  {
+    "method": "PATCH",
+    "path": "/v1/agent-identities/:id",
+    "response": "AgentIdentity",
+    "input": "patch/command"
+  },
+  {
+    "method": "PATCH",
+    "path": "/v1/agent-identity-tokens/:id",
+    "response": "AgentIdentityToken",
+    "input": "patch/command"
+  },
+  {
+    "method": "PATCH",
+    "path": "/v1/profile",
+    "response": "PersonalProfile",
+    "input": "patch/command"
+  },
+  {
+    "method": "PATCH",
+    "path": "/v1/profile/sign-in-methods/:id",
+    "response": "SignInMethod",
+    "input": "patch/command"
+  },
+  {
+    "method": "PATCH",
+    "path": "/v1/project-memberships/:id",
+    "response": "ProjectMembership",
+    "input": "patch/command"
+  },
+  {
+    "method": "PATCH",
+    "path": "/v1/projects/:id",
+    "response": "Project",
+    "input": "patch/command"
+  },
+  {
+    "method": "PATCH",
+    "path": "/v1/sessions/:id",
+    "response": "Session",
+    "input": "patch/command"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/account-invitations/:id/acceptance",
+    "response": "AccountMembership",
+    "input": "command"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/account-invitations/:id/deliveries",
+    "response": "AccountInvitation",
+    "input": "command"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/accounts",
+    "response": "Account",
+    "input": "create"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/accounts/:id/agent-identities",
+    "response": "AgentIdentity",
+    "input": "create"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/accounts/:id/impact-previews",
+    "response": "ImpactPreview",
+    "input": "command"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/accounts/:id/invitations",
+    "response": "AccountInvitation",
+    "input": "create"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/accounts/:id/memberships",
+    "response": "AccountMembership",
+    "input": "create"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/accounts/:id/projects",
+    "response": "Project",
+    "input": "create"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/agent-identities/:id/tokens",
+    "response": "AgentIdentityToken",
+    "input": "create"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/projects/:id/agent-authorizations",
+    "response": "AgentAuthorization",
+    "input": "create"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/projects/:id/memberships",
+    "response": "ProjectMembership",
+    "input": "create"
+  }
+]

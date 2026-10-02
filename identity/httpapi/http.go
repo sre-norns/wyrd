@@ -17,30 +17,27 @@ import (
 	"github.com/google/uuid"
 	server "github.com/sre-norns/wyrd/identity"
 	expbench "github.com/sre-norns/wyrd/identity/model"
+	"github.com/sre-norns/wyrd/identity/resource"
 	"github.com/sre-norns/wyrd/pkg/bark"
 )
 
 func writeProblem(ctx *gin.Context, err error) {
-	p := &server.Problem{Status: 500, Code: "internal-error", Detail: "The service cannot complete the request."}
 	var domain *server.Problem
-	if errors.As(err, &domain) {
-		copy := *domain
-		p = &copy
+	var input *resource.InputError
+	switch {
+	case errors.As(err, &input):
+		err = &bark.Problem{Status: 422, Code: "validation", Title: "Validation failed", Detail: input.Detail, Fields: map[string]string{input.Field: input.Detail}}
+	case errors.As(err, &domain):
+		fields := map[string]string{}
+		for key, value := range domain.Fields {
+			fields[resource.FieldPath(key)] = value
+		}
+		err = &bark.Problem{Type: domain.Type, Status: domain.Status, Title: http.StatusText(domain.Status), Code: domain.Code, Detail: domain.Detail, Fields: fields}
+		if domain.Status == 429 {
+			ctx.Header("Retry-After", "60")
+		}
 	}
-	if p.Status == 0 {
-		p.Status = 500
-	}
-	if p.Type == "" {
-		p.Type = "urn:exp-bench:problem:" + p.Code
-	}
-	p.Title = http.StatusText(p.Status)
-	if p.Status == 429 {
-		ctx.Header("Retry-After", "60")
-	}
-	p.Instance = ctx.Request.URL.Path
-	p.RequestID = ctx.GetString("requestID")
-	ctx.Header("Content-Type", "application/problem+json")
-	ctx.AbortWithStatusJSON(p.Status, p)
+	bark.AbortResourceError(ctx, err)
 }
 
 type resourceResponse[T any] struct{ ctx *gin.Context }
@@ -63,7 +60,21 @@ func (r *resourceResponse[T]) send(status int, v T) {
 	}); ok {
 		r.ctx.Header("ETag", server.ETag(m.SystemMetadata().Revision))
 	}
-	r.ctx.JSON(status, v)
+	if owner := resource.OutcomeOwner(v); owner != "" {
+		r.ctx.Set("identityOutcomeAccount", owner)
+	}
+	var body any
+	var err error
+	if r.ctx.Request.Method == http.MethodGet {
+		body, err = resource.Encode(v)
+	} else {
+		body, err = resource.EncodeResult(v)
+	}
+	if err != nil {
+		writeProblem(r.ctx, err)
+		return
+	}
+	r.ctx.JSON(status, body)
 }
 func (r *resourceResponse[T]) Found(v T, found bool, err error) {
 	if err != nil {
@@ -100,7 +111,12 @@ func (r *resourceResponse[T]) List(items []T, page manifest.Page, err error) {
 		writeProblem(r.ctx, err)
 		return
 	}
-	r.ctx.JSON(200, listPage(items, page))
+	body, encodeErr := resource.Encode(listPage(items, page))
+	if encodeErr != nil {
+		writeProblem(r.ctx, encodeErr)
+		return
+	}
+	r.ctx.JSON(200, body)
 }
 
 // listPage is the list contract (ADR 0001 §8): {items, limit, next?, total?}.
@@ -129,65 +145,32 @@ func ResourceValueAPI[T any]() gin.HandlerFunc {
 			return
 		}
 		var fields map[string]json.RawMessage
-		if ctx.Request.Method == http.MethodPatch {
-			if err := json.Unmarshal(body, &fields); err != nil {
-				writeProblem(ctx, &server.Problem{Status: 400, Code: "invalid-json", Detail: "Invalid JSON body."})
-				return
+		if resource.IsResource(value) {
+			fields, err = resource.DecodeInput(body, &value, ctx.Request.Method == http.MethodPatch)
+		} else {
+			d := json.NewDecoder(bytes.NewReader(body))
+			d.DisallowUnknownFields()
+			err = d.Decode(&value)
+			if err != nil {
+				err = &server.Problem{Status: 400, Code: "invalid-json", Detail: "Invalid command body."}
+			}
+			if err == nil && d.Decode(new(any)) != io.EOF {
+				err = &resource.InputError{Field: "body", Detail: "Only one JSON value is permitted."}
 			}
 		}
-		d := json.NewDecoder(bytes.NewReader(body))
-		d.DisallowUnknownFields()
-		if err = d.Decode(&value); err != nil {
-			writeProblem(ctx, &server.Problem{Status: 400, Code: "invalid-json", Detail: err.Error()})
-			return
-		}
-		if d.Decode(new(any)) != io.EOF {
-			writeProblem(ctx, &server.Problem{Status: 400, Code: "invalid-json", Detail: "Only one JSON value is permitted."})
-			return
-		}
-		if _, ok := any(value).(expbench.AccountInvitation); ok && ctx.Request.Method == http.MethodPost {
-			var supplied map[string]json.RawMessage
-			_ = json.Unmarshal(body, &supplied)
-			for _, field := range []string{"token", "email_delivery", "accepted_by", "membership_id", "generation"} {
-				if _, exists := supplied[field]; exists {
-					writeProblem(ctx, &server.Problem{Status: 422, Code: "validation", Detail: "Invitation result fields are read-only."})
-					return
-				}
-			}
-		}
-		if i, ok := any(value).(expbench.AccountInvitation); ok && ctx.Request.Method == http.MethodPost {
-			// Legacy Go clients serialize zero-valued resource metadata. Preserve it.
-			if !i.ExpiresAt.IsZero() || i.Status != "" || i.Revision != 0 || !i.CreatedAt.IsZero() || !i.UpdatedAt.IsZero() || !reflect.ValueOf(i.Actor).IsZero() {
-				writeProblem(ctx, &server.Problem{Status: 422, Code: "validation", Detail: "Invitation result fields are read-only."})
-				return
-			}
-		}
-		if agent, ok := any(value).(expbench.AgentIdentity); ok && agent.LastSeenAt != nil {
-			writeProblem(ctx, &server.Problem{Status: 422, Code: "validation", Detail: "Last seen time is read-only."})
+		if err != nil {
+			writeProblem(ctx, err)
 			return
 		}
 		if m, ok := any(&value).(interface{ Metadata() *expbench.Resource }); ok {
-			meta := m.Metadata()
-			if ctx.Request.Method == http.MethodPost && meta.ID != "" {
-				writeProblem(ctx, &server.Problem{Status: 422, Code: "validation", Detail: "The server assigns resource identifiers."})
-				return
-			}
 			if ctx.Request.Method == http.MethodPatch {
-				if meta.ID != "" && meta.ID != ctx.Param("id") {
-					writeProblem(ctx, &server.Problem{Status: 422, Code: "validation", Detail: "Path and body identifiers differ."})
-					return
-				}
-				delete(fields, "id")
-				meta.ID = ctx.Param("id")
+				m.Metadata().ID = ctx.Param("id")
 			}
 			if _, ok := any(value).(expbench.Project); ok && ctx.Request.Method == http.MethodPost {
-				if meta.AccountID != "" && string(meta.AccountID) != ctx.Param("id") {
-					writeProblem(ctx, &server.Problem{Status: 422, Code: "validation", Detail: "Path and body ownership differ."})
-					return
-				}
-				meta.AccountID = expbench.AccountID(ctx.Param("id"))
+				m.Metadata().AccountID = expbench.AccountID(ctx.Param("id"))
 			}
 		}
+
 		req := server.Request{ID: ctx.GetString("requestID"), Method: ctx.Request.Method, Target: ctx.Request.URL.Path, IfMatch: ctx.GetHeader("If-Match"), Patch: fields, InvitationToken: ctx.GetHeader("X-Invitation-Token")}
 		req.SupportReason, req.SupportReference = supportAuditFields(body)
 		ctx.Request = ctx.Request.WithContext(server.WithRequest(ctx.Request.Context(), req))
@@ -274,7 +257,7 @@ func authenticated(s *server.Service) gin.HandlerFunc {
 			ctx.Writer = capture
 			ctx.Request = ctx.Request.WithContext(tx)
 			ctx.Next()
-			return server.HTTPOutcome{Status: capture.Status(), Body: capture.body.Bytes(), Header: capture.headers}
+			return server.HTTPOutcome{Status: capture.Status(), Body: capture.body.Bytes(), Header: capture.headers, AccountID: expbench.AccountID(ctx.GetString("identityOutcomeAccount"))}
 		})
 		ctx.Writer = real
 		if err != nil {
@@ -495,3 +478,7 @@ func supportAuditFields(body []byte) (string, string) {
 	}
 	return fields.Reason, fields.Reference
 }
+
+// SendResource lets product-mounted identity/system routes use the same codec,
+// ETag and replay ownership as Mount. It does not authorize the operation.
+func SendResource[T any](ctx *gin.Context, status int, value T) { response[T](ctx).send(status, value) }

@@ -35,6 +35,9 @@ func Migrate(db *gorm.DB) error {
 	}
 	for _, sql := range []string{
 		"UPDATE users SET revision = 1 WHERE revision = 0",
+		"CREATE UNIQUE INDEX IF NOT EXISTS account_resource_name ON accounts (lower(btrim(name)))",
+		"CREATE UNIQUE INDEX IF NOT EXISTS project_resource_name ON projects (account_id, lower(btrim(name)))",
+		"CREATE UNIQUE INDEX IF NOT EXISTS agent_resource_name ON agent_identities (account_id, lower(btrim(name)))",
 		"CREATE UNIQUE INDEX IF NOT EXISTS account_member ON account_memberships(account_id,user_id)",
 		"CREATE UNIQUE INDEX IF NOT EXISTS project_member ON project_memberships(project_id,user_id)",
 		"CREATE UNIQUE INDEX IF NOT EXISTS project_agent ON agent_authorizations(project_id,agent_id)",

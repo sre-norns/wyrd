@@ -1,0 +1,5 @@
+{
+  "apiVersion": "identity.sre-norns.com/v1",
+  "kind": "account-invitations",
+  "spec": {"email": "member@example.test", "role": "member", "delivery": "manual"}
+}

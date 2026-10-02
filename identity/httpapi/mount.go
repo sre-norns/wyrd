@@ -70,7 +70,7 @@ func Mount(router *gin.Engine, srv *server.Service, cfg Config) {
 		router.GET("/oauth/"+form, identityAccess(srv, form))
 		router.POST("/oauth/"+form, identityAccess(srv, form))
 	}
-	v1 := router.Group("/v1", bark.ContentTypeAPI())
+	v1 := router.Group("/v1", bark.ContentTypeAPI(), resourceContentType())
 	v1.GET("/service-configuration", func(ctx *gin.Context) {
 		response[expbench.ServiceConfiguration](ctx).Found(srv.ServiceConfig().Get(ctx.Request.Context()))
 	})

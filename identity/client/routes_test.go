@@ -2,6 +2,8 @@ package client
 
 import (
 	"context"
+	"encoding/json"
+	"github.com/sre-norns/wyrd/identity/resource"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -68,6 +70,7 @@ func TestServiceRoutes(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.service+"/"+tc.operation+"/"+tc.method, func(t *testing.T) {
 			calls := 0
+			var resultType reflect.Type
 			c := testClient(t, func(r *http.Request) (*http.Response, error) {
 				calls++
 				if r.Method != tc.method || r.URL.Path != "/prefix"+tc.path {
@@ -79,20 +82,30 @@ func TestServiceRoutes(t *testing.T) {
 				if tc.method == "PATCH" && r.Header.Get("If-Match") != `"1"` {
 					t.Fatal("missing precondition")
 				}
+				sample := reflect.New(resultType).Elem()
+				if resultType.Kind() == reflect.Slice {
+					sample = reflect.New(resultType.Elem()).Elem()
+				}
+				encoded, err := resource.Encode(sample.Interface())
+				if err != nil {
+					t.Fatal(err)
+				}
+				raw, _ := json.Marshal(encoded)
 				if r.URL.Query().Get("limit") == "2" {
-					return reply(200, `{"items":[{"id":"returned"}],"limit":2,"next":"c2","total":3}`), nil
+					return reply(200, `{"items":[`+string(raw)+`],"limit":2,"next":"c2","total":3}`), nil
 				}
 				if tc.operation == "List" && tc.service == "SignInMethods" {
-					return reply(200, `{"items":[{"id":"returned"}]}`), nil
+					return reply(200, `{"items":[`+string(raw)+`]}`), nil
 				}
 				status := 200
 				if tc.method == "POST" {
 					status = 201
 				}
-				return reply(status, `{"id":"returned","revision":2}`), nil
+				return reply(status, string(raw)), nil
 			})
 			service := reflect.ValueOf(c).MethodByName(tc.service).Call(nil)[0]
 			method := service.MethodByName(tc.operation)
+			resultType = method.Type().Out(0)
 			args := make([]reflect.Value, method.Type().NumIn())
 			for i := range args {
 				typ := method.Type().In(i)
@@ -117,6 +130,7 @@ func TestServiceRoutes(t *testing.T) {
 						meta.Metadata().Revision = 1
 						if tc.method == "PATCH" {
 							meta.Metadata().ID = "id"
+							meta.Metadata().Status = "revoked"
 						}
 					}
 					args[i] = v

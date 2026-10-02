@@ -28,7 +28,7 @@ func (c *personalProfileClient) Update(ctx context.Context, profile model.Person
 		http.MethodPatch,
 		"/v1/profile",
 		nil,
-		map[string]any{"display_name": profile.DisplayName},
+		map[string]any{"spec": map[string]any{"displayName": profile.DisplayName}},
 	)
 	return
 }
@@ -60,7 +60,7 @@ func (c *signInMethodClient) Revoke(ctx context.Context, method model.SignInMeth
 		http.MethodPatch,
 		"/v1/profile/sign-in-methods/"+url.PathEscape(method.ID),
 		nil,
-		map[string]any{"status": "revoked"},
+		map[string]any{"operation": "revoke"},
 	)
 	return
 }
