@@ -27,6 +27,9 @@ func TestEveryMountedResourceRouteIsClassified(t *testing.T) {
 	for _, d := range resource.Definitions() {
 		known[d.Model] = true
 	}
+	// Explicit mutation wrappers contain the named registered resource.
+	known["SystemAccountCreated"] = known["SystemAccount"]
+	known["SystemInvitationCreated"] = known["SystemInvitation"]
 	inventory := map[string]bool{}
 	for _, row := range rows {
 		key := row.Method + " " + row.Path
@@ -46,6 +49,7 @@ func TestEveryMountedResourceRouteIsClassified(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	Mount(router, server.NewService(nil), Config{})
+	MountSystem(router, server.NewService(nil))
 	for _, route := range router.Routes() {
 		if !strings.HasPrefix(route.Path, "/v1/") {
 			continue

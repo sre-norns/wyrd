@@ -30,7 +30,10 @@ func writeProblem(ctx *gin.Context, err error) {
 	case errors.As(err, &domain):
 		fields := map[string]string{}
 		for key, value := range domain.Fields {
-			fields[resource.FieldPath(key)] = value
+			if !ctx.GetBool("identityCommandInput") {
+				key = resource.FieldPath(key)
+			}
+			fields[key] = value
 		}
 		err = &bark.Problem{Type: domain.Type, Status: domain.Status, Title: http.StatusText(domain.Status), Code: domain.Code, Detail: domain.Detail, Fields: fields}
 		if domain.Status == 429 {
@@ -139,6 +142,7 @@ var resourcePaths = map[string]string{"Account": "accounts", "AccountMembership"
 func ResourceValueAPI[T any]() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var value T
+		ctx.Set("identityCommandInput", !resource.IsResource(value))
 		body, err := io.ReadAll(io.LimitReader(ctx.Request.Body, 1048577))
 		if err != nil || len(body) > 1048576 {
 			writeProblem(ctx, &server.Problem{Status: 413, Code: "body-too-large", Detail: "The request exceeds 1 MiB."})

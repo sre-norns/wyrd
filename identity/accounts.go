@@ -43,7 +43,7 @@ func (a *accountsService) CreateOrUpdate(ctx context.Context, account expbench.A
 			}
 			invitation, err := newInvitation(ctx, tx, a.config, expbench.AccountInvitation{Resource: expbench.Resource{AccountID: expbench.AccountID(resource.ID)}, Email: account.OwnerEmail, Role: "owner", Delivery: account.Delivery})
 			if err != nil {
-				return err
+				return remapProblemField(err, "email", "owner_email")
 			}
 			resource.OwnerInvitation = &invitation
 			return nil

@@ -83,3 +83,27 @@ func TestOneTimeOutputRequiresAnOperation(t *testing.T) {
 		t.Fatalf("operation output %s", buf.String())
 	}
 }
+
+func TestSystemReadExamplePreservesInitiatorAndNestedApprovals(t *testing.T) {
+	data, err := os.ReadFile("../examples/deletion-request-read.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, _, err := DecodeObject[model.AccountDeletionRequest](data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, format := range []string{FormatJSON, FormatYAML} {
+		var buf bytes.Buffer
+		if err = (Output{Format: format, Stdout: &buf}).Encode(value); err != nil {
+			t.Fatal(err)
+		}
+		got, _, err := DecodeObject[model.AccountDeletionRequest](buf.Bytes())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.ActorID != "requesting-operator" || got.LastModifiedBy.UserID != "independent-approver" || len(got.Approvals) != 1 || got.Approvals[0].UserID != "independent-approver" || got.TargetAccountID != "target-account-uid" {
+			t.Fatalf("%s lost attribution: %+v", format, got)
+		}
+	}
+}

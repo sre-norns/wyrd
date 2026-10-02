@@ -9,17 +9,18 @@ import (
 	"time"
 
 	e "github.com/sre-norns/wyrd/identity/model"
+	"github.com/sre-norns/wyrd/identity/resource"
 	"github.com/sre-norns/wyrd/pkg/manifest"
 	"gorm.io/gorm"
 )
 
 func systemRecord(r e.Resource) e.SystemRecord {
-	return e.SystemRecord{ID: r.ID, Revision: r.Revision, Status: r.Status, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, ActorID: r.Actor.UserID}
+	return e.SystemRecord{ID: r.ID, Revision: r.Revision, Status: r.Status, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, ActorID: r.Actor.UserID, LastModifiedBy: publicActor(r.Actor)}
 }
 
 func newSystemRecord(ctx context.Context, status string) e.SystemRecord {
 	t := time.Now().UTC()
-	return e.SystemRecord{ID: newID(), Revision: 1, Status: status, CreatedAt: t, UpdatedAt: t, ActorID: principal(ctx).UserID}
+	return e.SystemRecord{ID: newID(), Revision: 1, Status: status, CreatedAt: t, UpdatedAt: t, ActorID: principal(ctx).UserID, LastModifiedBy: publicActor(mutationActor(ctx))}
 }
 
 func accountImpact(db *gorm.DB, account e.AccountID) (map[string]int64, string, error) {
@@ -331,7 +332,15 @@ func recordSystemAudit(ctx context.Context, db *gorm.DB, account e.AccountID, ta
 		return err
 	}
 	if projectAccount {
-		return audit(ctx, db, Audit{Principal: principal(ctx), Action: operation, Target: &e.Resource{ID: target, AccountID: account, Revision: systemTargetRevision(db, target)}, Outcome: outcome, RequestID: request(ctx).ID, SystemAction: &action})
+		wire, err := resource.Encode(event)
+		if err != nil {
+			return err
+		}
+		snapshot, err := json.Marshal(wire)
+		if err != nil {
+			return err
+		}
+		return audit(ctx, db, Audit{Snapshot: snapshot, Principal: principal(ctx), Action: operation, Target: &e.Resource{ID: target, AccountID: account, Revision: systemTargetRevision(db, target)}, Outcome: outcome, RequestID: request(ctx).ID, SystemAction: &action})
 	}
 
 	return nil

@@ -2,6 +2,7 @@ package identity
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"regexp"
@@ -9,6 +10,7 @@ import (
 	"sort"
 
 	e "github.com/sre-norns/wyrd/identity/model"
+	"github.com/sre-norns/wyrd/identity/resource"
 	"gorm.io/gorm"
 )
 
@@ -25,8 +27,11 @@ type Kind struct {
 	PurgeHook           func(context.Context, *gorm.DB, e.AccountID) error
 }
 
-// Audit is a credential-free record written in the mutation transaction.
+// Audit carries domain policy inputs and a credential-free snapshot in the mutation transaction.
 type Audit struct {
+	// Snapshot is the canonical, credential-free identity resource for host history.
+	// Resource remains a domain value for authorization/policy callbacks.
+	Snapshot                      json.RawMessage
 	Principal                     e.Principal
 	Action                        string
 	Target                        *e.Resource
@@ -153,9 +158,20 @@ func credentialOwnerTables(db *gorm.DB) []string {
 	return out
 }
 func auxiliaryTables(db *gorm.DB) []string {
-	return append([]string{"oauth_grants", "request_windows", "invitation_deliveries", "invitation_continuations", "project_access_mails"}, extensions(db).AuxiliaryTables...)
+	return append([]string{"oauth_grants", "request_windows", "invitation_deliveries", "invitation_continuations", "project_access_mails", "idempotency_records"}, extensions(db).AuxiliaryTables...)
 }
 func audit(ctx context.Context, db *gorm.DB, a Audit) error {
+	if resource.IsResource(a.Resource) {
+		wire, err := resource.Encode(a.Resource)
+		if err != nil {
+			return err
+		}
+		a.Snapshot, err = json.Marshal(wire)
+		if err != nil {
+			return err
+		}
+	}
+
 	if f := extensions(db).Auditor; f != nil {
 		return f.Record(ctx, db, a)
 	}

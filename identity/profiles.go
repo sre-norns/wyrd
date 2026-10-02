@@ -32,11 +32,12 @@ func profileUser(ctx context.Context, db *gorm.DB) (user, error) {
 
 func publicProfile(value user) e.PersonalProfile {
 	return e.PersonalProfile{
-		UserID:      value.ID,
-		Email:       value.Email,
-		DisplayName: value.DisplayName,
-		Status:      value.Status,
-		Revision:    value.Revision,
+		UserID:         value.ID,
+		LastModifiedBy: value.LastModifiedBy,
+		Email:          value.Email,
+		DisplayName:    value.DisplayName,
+		Status:         value.Status,
+		Revision:       value.Revision,
 	}
 }
 
@@ -122,7 +123,7 @@ func (p *personalProfileService) Update(ctx context.Context, profile e.PersonalP
 		}
 		result := tx.Model(&user{}).
 			Where("id = ? AND revision = ?", current.ID, current.Revision).
-			Updates(map[string]any{"display_name": displayName, "revision": current.Revision + 1})
+			Updates(systemMutation(ctx, map[string]any{"display_name": displayName, "revision": current.Revision + 1}))
 		if result.Error != nil {
 			return result.Error
 		}

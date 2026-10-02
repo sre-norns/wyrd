@@ -2,7 +2,7 @@
 
 M8 replaces the identity resource wire format in one cutover. There is no flat
 resource reader or writer. This change requires wyrd root v0.7.0. Publish
-identity/v0.7.0 only after the remaining M8 system-resource work and validation;
+identity/v0.7.0 after the tenant and system PRs are merged and validated;
 products adopt their backend, components, CLI and SDK changes together.
 
 `resource` owns the identity schemas and explicit domain-to-wire mappings.
@@ -35,25 +35,25 @@ replace route and service authorization.
 | Model / kind | Ownership | Spec (C=create, P=patch) | Observed status |
 | --- | --- | --- | --- |
 | `Account` / `accounts` | system | `description` (CP), `ownerEmail` (C) input only, `delivery` (C) input only | `lifecycleReason`, `lifecycleAt` |
-| `AccountDeletionApproval` / `deletion-approvals` | system | `requestId` | `userId`, `authenticatedAt`, `assuranceMethod` |
-| `AccountDeletionRequest` / `deletion-requests` | system | `targetAccountId`, `reason`, `reference` | `counts`, `approvalMode`, `executeAfter`, `completedAt`, `cancelReason`, `failureCode`, `attempts`, `approvals` |
+| `AccountDeletionApproval` / `deletion-approvals` | system | `requestId` | `initiatorId`, `userId`, `authenticatedAt`, `assuranceMethod` |
+| `AccountDeletionRequest` / `deletion-requests` | system | `targetAccountId`, `reason`, `reference` | `initiatorId`, `counts`, `approvalMode`, `executeAfter`, `completedAt`, `cancelReason`, `failureCode`, `attempts`, `approvals` |
 | `AccountInvitation` / `account-invitations` | account | `email` (C), `role` (C), `delivery` (C) | `emailDelivery`, `expiresAt`, `acceptedBy`, `membershipId` |
 | `AccountMembership` / `account-memberships` | account | `userId` (C), `role` (CP) | `email`, `displayName` |
-| `AccountPurgeTombstone` / `purge-tombstones` | system | `targetAccountId`, `requestId`, `reason`, `reference` | `approverIds`, `counts` |
+| `AccountPurgeTombstone` / `purge-tombstones` | system | `targetAccountId`, `requestId`, `reason`, `reference` | `initiatorId`, `approverIds`, `counts` |
 | `AgentAuthorization` / `agent-authorizations` | project | `agentId` (C), `roles` (CP) | `activePackages` |
 | `AgentIdentity` / `agent-identities` | account | `description` (CP) | `lastSeenAt` |
 | `AgentIdentityToken` / `agent-identity-tokens` | account | `agentId`, `expiresAt` (C) | — |
-| `ImpactPreview` / `impact-previews` | system | `targetAccountId`, `targetId`, `operation` | `targetRevision`, `counts`, `expiresAt`, `consumedAt` |
+| `ImpactPreview` / `impact-previews` | system | `targetAccountId`, `targetId`, `operation` | `initiatorId`, `targetRevision`, `counts`, `expiresAt`, `consumedAt` |
 | `Limit` / `limits` | system, account, project | `value` (P), `unit`, `periodSeconds` (P), `reason` (P) input only | `effective`, `usage`, `limitingSource`, `overLimit` |
-| `OwnerRecovery` / `owner-recoveries` | system | `targetAccountId`, `previousMembershipId`, `replacementEmail`, `reason`, `reference` | `emailDelivery`, `invitationId`, `replacementMembershipId`, `invitationStatus`, `expiresAt` |
+| `OwnerRecovery` / `owner-recoveries` | system | `targetAccountId`, `previousMembershipId`, `replacementEmail`, `reason`, `reference` | `initiatorId`, `emailDelivery`, `invitationId`, `replacementMembershipId`, `invitationStatus`, `expiresAt` |
 | `PersonalProfile` / `personal-profiles` | system | `displayName` (P) | `email` |
 | `Project` / `projects` | account | `description` (CP), `target` (CP) | `currentContextId` |
 | `ProjectMembership` / `project-memberships` | project | `userId` (C) | `email`, `displayName` |
 | `Session` / `sessions` | system, account | — | `scope`, `authenticatedAt`, `authenticationMethod`, `userId`, `clientId`, `origin`, `ipAddress`, `userAgent`, `expiresAt`, `refreshExpiresAt` |
 | `SignInMethod` / `sign-in-methods` | system | — | `method`, `lastUsedAt` |
-| `StepUpAuthorization` / `step-up-authorizations` | system | `targetAccountId`, `action` | `authenticatedAt`, `assuranceMethod`, `expiresAt`, `consumedAt` |
+| `StepUpAuthorization` / `step-up-authorizations` | system | `targetAccountId`, `action` | `initiatorId`, `authenticatedAt`, `assuranceMethod`, `expiresAt`, `consumedAt` |
 | `SystemAccount` / `system-accounts` | system | `description` | `ownerSetup`, `counts`, `limits`, `overLimit`, `supportStatus`, `lifecycleReason`, `lifecycleAt` |
-| `SystemActivity` / `system-activity` | system | — | `targetAccountId`, `kind`, `action`, `targetId`, `outcome`, `reason`, `reference`, `requestId`, `sessionScope`, `assuranceMethod`, `changeIds` |
+| `SystemActivity` / `system-activity` | system | — | `initiatorId`, `targetAccountId`, `kind`, `action`, `targetId`, `outcome`, `reason`, `reference`, `requestId`, `sessionScope`, `assuranceMethod`, `changeIds` |
 | `SystemEntitlement` / `system-entitlements` | system | — | — |
 | `SystemInvitation` / `system-account-invitations` | account | `email`, `role`, `delivery` | `emailDelivery`, `expiresAt` |
 | `SystemMembership` / `system-account-memberships` | account | `userId`, `role` | `email`, `activeOwners` |
@@ -134,7 +134,12 @@ account create (`resource.OutcomeOwner` derives it before serialization). There
 is no parser for a flat response ID. Hosts using `httpapi.Authenticate` can use
 `httpapi.SendResource`, which records this ownership in the capture context and
 serializes the response. Product audit callbacks still receive domain values;
-they must use the codec when writing canonical snapshots during product adoption.
+`Audit.Snapshot` now supplies the credential-free canonical JSON to persist.
+`Audit.Resource` remains the domain value for authorization callbacks. System
+command callbacks receive a canonical SystemActivity snapshot with their original
+`SystemAction` and target; they must retain their metadata-only projection policy.
+The callback still executes inside the mutation transaction, and an error rolls
+back both the resource and its history. No snapshot migration is provided.
 
 ## Coverage and adoption gates
 
@@ -146,13 +151,31 @@ summaries and directory candidates are query exceptions; any nested registered
 resource is still canonical. Personal profile handlers and sign-in methods are
 covered even though they bypass the generic input handler.
 
-The remaining system-focused M8 PR must verify every product-mounted system
-route, system SDK/command adapter, bulk lifecycle attribution, deletion/recovery
-replay cleanup, and canonical snapshot handling at the host boundary before the
-identity release gate closes. The schema definitions here provide those hosts
-with typed projections; a compiled host using old bespoke handlers is not proof
-of wire adoption. Urth/Exp-Bench and norns-components still need their coordinated
-adoption PRs; do not deploy this module independently with their old clients.
+`Mount` and opt-in `MountSystem` cover 76 resource/query routes; the 26 shared
+system routes have matching SDK methods. The [host adoption matrix](system-adoption.md)
+audits Exp-Bench's remaining system routes, SDK/CLI and snapshot boundary and
+Urth's current mounting. Shared validation includes independent approval,
+recovery credential redaction, purge replay ownership, rollback, bulk attribution,
+and canonical snapshots. Product wire adoption remains at the product release
+gates: compiling an old bespoke host is not proof of transport adoption.
+
+## Attribution and cleanup
+
+`status.lastModifiedBy` describes the last versioned mutation. System records
+persist it separately from the immutable initiator (`status.initiatorId`), which
+binds previews/step-ups and independent approval. Approval by a second operator
+updates lastModifiedBy without changing the initiator. Worker transitions use a
+service actor; retained deletion requests and tombstones preserve the original
+initiator. System account/membership/invitation projections use their underlying
+resource's last mutation actor. Bulk session/token/membership revocations also
+update actors and versions, retaining original `status.authority`.
+
+Profile and sign-in method writes persist safe actor attribution. Sign-in
+`lastUsedAt` heartbeats do not change the resource version or its mutation actor.
+Identity owns `idempotency_records` cleanup by account, so hosts need no auxiliary
+table registration for those records. Purge rollback retains replay records;
+success removes only the target account's records, retaining system approvals,
+deletion requests, tombstones and safe system activity.
 
 ## Examples
 
@@ -164,3 +187,17 @@ adoption PRs; do not deploy this module independently with their old clients.
 - [Revoke](../examples/revoke.json): PATCH a supported lifecycle endpoint with its current ETag.
 
 Tests parse these files through the public request/CLI codecs.
+
+- [System account create](../examples/system-account-create.json): explicit command DTO for POST `/v1/system/accounts`; the result wraps a canonical system account and one-time owner-invitation token.
+- [Owner recovery](../examples/owner-recovery-create.json): POST `/v1/system/accounts/{account}/owner-recoveries` with the account's read ETag and a replay key.
+- [Deletion request](../examples/deletion-request-create.json): POST `/v1/system/accounts/{account}/deletion-requests` with the archived account's ETag, fresh preview and password step-up IDs.
+- [Approved deletion read](../examples/deletion-request-read.yaml): canonical CLI JSON/YAML output, including an independent approver and nested approval resource. Use lifecycle commands to cancel/retry; its status is not writable.
+
+System command and query DTOs are explicit protocol exceptions: `SystemAction`,
+`SystemAccountCreate`, `FirstOwnerInvitation`, `SystemQuery`, and SystemPage's
+`generated_at` keep their declared keys (including `owner_email`, `preview_id`,
+`replacement_email`). They are not flat resource representations. Validation
+paths for commands name their actual input fields; resource errors name canonical
+metadata/spec/status paths. Command parsers reject unknown fields and multiple
+JSON documents. The examples above are parsed through the same mounted parser
+and public CLI codecs; the account-create example runs in the PostgreSQL workflow.

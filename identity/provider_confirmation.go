@@ -407,7 +407,7 @@ func linkProviderMethod(tx *gorm.DB, userID string, identity providerIdentity) e
 	if err != nil {
 		return err
 	}
-	return tx.Create(&userSignInMethod{ID: newID(), UserID: userID, Method: identity.Provider, Subject: &subject, Status: "active", CreatedAt: current, Revision: 1}).Error
+	return tx.Create(&userSignInMethod{LastModifiedBy: e.ResourceActor{Type: "user", UserID: userID}, ID: newID(), UserID: userID, Method: identity.Provider, Subject: &subject, Status: "active", CreatedAt: current, Revision: 1}).Error
 }
 
 func (s *Service) registerProviderUser(ctx context.Context, tx *gorm.DB, identity providerIdentity, accountName string) (user, error) {
@@ -425,6 +425,7 @@ func (s *Service) registerProviderUser(ctx context.Context, tx *gorm.DB, identit
 		return user{}, err
 	}
 	u := user{ID: newID(), Email: identity.Email, Status: "active", Revision: 1}
+	u.LastModifiedBy = e.ResourceActor{Type: "user", UserID: u.ID}
 	if err := tx.Create(&u).Error; err != nil {
 		return u, err
 	}

@@ -168,6 +168,84 @@
     "input": "none"
   },
   {
+    "method": "GET",
+    "path": "/v1/system/accounts",
+    "response": "SystemAccount",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/system/accounts/:id",
+    "response": "SystemAccount",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/system/accounts/:id/impact-previews",
+    "response": "ImpactPreview",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/system/accounts/:id/invitations",
+    "response": "SystemInvitation",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/system/accounts/:id/memberships",
+    "response": "SystemMembership",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/system/accounts/:id/owner-recoveries",
+    "response": "OwnerRecovery",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/system/activity",
+    "response": "SystemActivity",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/system/audit-events",
+    "response": "SystemActivity",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/system/changes",
+    "response": "SystemActivity",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/system/configuration",
+    "response": "query:SystemConfiguration",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/system/deletion-requests",
+    "response": "AccountDeletionRequest",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/system/deletion-requests/:id",
+    "response": "AccountDeletionRequest",
+    "input": "none"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/system/owner-recoveries/:id",
+    "response": "OwnerRecovery",
+    "input": "none"
+  },
+  {
     "method": "PATCH",
     "path": "/v1/account-invitations/:id",
     "response": "AccountInvitation",
@@ -234,6 +312,30 @@
     "input": "patch/command"
   },
   {
+    "method": "PATCH",
+    "path": "/v1/system/account-memberships/:id",
+    "response": "SystemMembership",
+    "input": "command"
+  },
+  {
+    "method": "PATCH",
+    "path": "/v1/system/accounts/:id",
+    "response": "SystemAccount",
+    "input": "command"
+  },
+  {
+    "method": "PATCH",
+    "path": "/v1/system/deletion-requests/:id",
+    "response": "AccountDeletionRequest",
+    "input": "command"
+  },
+  {
+    "method": "PATCH",
+    "path": "/v1/system/owner-recoveries/:id",
+    "response": "OwnerRecovery",
+    "input": "command"
+  },
+  {
     "method": "POST",
     "path": "/v1/account-invitations/:id/acceptance",
     "response": "AccountMembership",
@@ -298,5 +400,59 @@
     "path": "/v1/projects/:id/memberships",
     "response": "ProjectMembership",
     "input": "create"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/system/account-invitations/:id/deliveries",
+    "response": "SystemInvitation",
+    "input": "command"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/system/account-invitations/:id/revocations",
+    "response": "SystemInvitation",
+    "input": "command"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/system/accounts",
+    "response": "SystemAccountCreated",
+    "input": "command"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/system/accounts/:id/deletion-requests",
+    "response": "AccountDeletionRequest",
+    "input": "command"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/system/accounts/:id/impact-previews",
+    "response": "ImpactPreview",
+    "input": "command"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/system/accounts/:id/owner-invitations",
+    "response": "SystemInvitationCreated",
+    "input": "command"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/system/accounts/:id/owner-recoveries",
+    "response": "OwnerRecovery",
+    "input": "command"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/system/accounts/:id/step-up-authorizations",
+    "response": "StepUpAuthorization",
+    "input": "command"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/system/deletion-requests/:id/approvals",
+    "response": "AccountDeletionRequest",
+    "input": "command"
   }
 ]

@@ -618,3 +618,21 @@ func mergeLabels(old, patch json.RawMessage) (json.RawMessage, error) {
 	}
 	return json.Marshal(before)
 }
+
+// remapProblemField preserves a nested service error while naming its input in
+// the enclosing operation (for example an invitation email in account create).
+func remapProblemField(err error, from, to string) error {
+	var p *Problem
+	if !errors.As(err, &p) || p.Fields[from] == "" {
+		return err
+	}
+	copy := *p
+	copy.Fields = make(map[string]string, len(p.Fields))
+	for key, value := range p.Fields {
+		if key == from {
+			key = to
+		}
+		copy.Fields[key] = value
+	}
+	return &copy
+}

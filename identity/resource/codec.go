@@ -22,11 +22,8 @@ const APIVersion = "identity.sre-norns.com/v1"
 var ErrNotResource = errors.New("type is not an identity resource")
 
 // Actor is attribution, never an authorization snapshot or credential.
-type Actor struct {
-	Type    string                `json:"type" yaml:"type"`
-	UserID  string                `json:"userId,omitempty" yaml:"userId,omitempty"`
-	AgentID model.AgentIdentityID `json:"agentId,omitempty" yaml:"agentId,omitempty"`
-}
+type Actor = model.ResourceActor
+
 type State struct {
 	Phase          string `json:"phase" yaml:"phase"`
 	Authority      string `json:"authority,omitempty" yaml:"authority,omitempty"`
@@ -150,6 +147,13 @@ func metaFor(v reflect.Value) (manifest.ObjectMeta, error) {
 }
 func stateFor(v reflect.Value) State {
 	s := State{Phase: stringField(v, "Status"), Authority: stringField(v, "Authority")}
+	if field := v.FieldByName("LastModifiedBy"); field.IsValid() {
+		actor := field.Interface().(model.ResourceActor)
+		if actor.Type != "" {
+			s.LastModifiedBy = &actor
+		}
+		return s
+	}
 	if f := v.FieldByName("Actor"); f.IsValid() {
 		p := f.Interface().(model.Principal)
 		if p.Type != "" {
@@ -456,10 +460,12 @@ func decodeResource(data []byte, v reflect.Value, d definition) error {
 	setString(v, "Authority", state.Authority)
 	if state.LastModifiedBy != nil {
 		a := state.LastModifiedBy
+		if f := v.FieldByName("LastModifiedBy"); f.IsValid() {
+			f.Set(reflect.ValueOf(*a))
+		}
 		if f := v.FieldByName("Actor"); f.IsValid() {
 			f.Set(reflect.ValueOf(model.Principal{Type: a.Type, UserID: a.UserID, AgentID: a.AgentID}))
 		}
-		setString(v, "ActorID", a.UserID)
 	}
 	if f := v.FieldByName("Links"); f.IsValid() {
 		links := map[string]string{}

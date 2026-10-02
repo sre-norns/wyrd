@@ -1,0 +1,6 @@
+{
+  "target_id": "owner-membership",
+  "replacement_email": "replacement@example.test",
+  "delivery": "manual",
+  "reason": "Recover access after confirming the replacement owner"
+}

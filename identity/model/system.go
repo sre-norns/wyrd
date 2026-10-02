@@ -10,19 +10,22 @@ const (
 )
 
 type SystemEntitlement struct {
-	UserID    string    `json:"user_id" gorm:"primaryKey"`
-	Status    string    `json:"status"`
-	Revision  int64     `json:"revision"`
-	UpdatedAt time.Time `json:"updated_at"`
+	LastModifiedBy ResourceActor `json:"-" gorm:"serializer:json;type:jsonb"`
+	UserID         string        `json:"user_id" gorm:"primaryKey"`
+	Status         string        `json:"status"`
+	Revision       int64         `json:"revision"`
+	UpdatedAt      time.Time     `json:"updated_at"`
 }
 
 type SystemRecord struct {
-	ID        string    `json:"id" gorm:"primaryKey"`
-	Revision  int64     `json:"revision"`
-	Status    string    `json:"status" gorm:"index"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	ActorID   string    `json:"actor_id"`
+	LastModifiedBy ResourceActor `json:"-" gorm:"serializer:json;type:jsonb"`
+	ID             string        `json:"id" gorm:"primaryKey"`
+	Revision       int64         `json:"revision"`
+	Status         string        `json:"status" gorm:"index"`
+	CreatedAt      time.Time     `json:"created_at"`
+	UpdatedAt      time.Time     `json:"updated_at"`
+	// ActorID is the immutable initiator used by preview and independent-approval checks.
+	ActorID string `json:"actor_id"`
 }
 
 type PurgePolicy struct {
