@@ -7,7 +7,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/ijt/go-anytime v1.9.2
 	github.com/stretchr/testify v1.12.1
-	github.com/xo/dburl v0.34.0
+	github.com/xo/dburl v0.40.0
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/driver/postgres v1.6.3
