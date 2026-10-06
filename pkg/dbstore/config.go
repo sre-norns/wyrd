@@ -64,7 +64,7 @@ func (c Config) Dialector() (gorm.Dialector, error) {
 	// Matched on the dialect, not on the Go driver xo/dburl would use: from
 	// dburl v0.32 a postgres:// URL reports the "pgx" driver, and matching
 	// Driver alone left every Postgres URL unsupported.
-	switch u.UnaliasedDriver {
+	switch u.Dialect {
 	case "sqlite3", "sqlite":
 		return sqlite.Open(u.DSN), nil
 	case "mysql":
