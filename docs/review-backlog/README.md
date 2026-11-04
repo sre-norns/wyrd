@@ -71,6 +71,7 @@ Status values:
 | 018 | P1 | ready | [Define bounded and observable webhook delivery](tasks/018-resilient-webhook-delivery.md) | — | 009, 019, 020 |
 | 019 | P2 | blocked | [Reduce package coupling and optional dependency cost](tasks/019-deepen-package-seams.md) | 001–018 | all package-interface tasks |
 | 020 | P1 | ready | [Make quality gates reproducible and contract-focused](tasks/020-reproducible-contract-verification.md) | — | all test and workflow changes |
+| 021 | P0 | ready | [Keep connection credentials out of dbstore errors](tasks/021-redact-connection-credentials.md) | — | 004 |
 
 Priority meanings:
 
@@ -88,6 +89,7 @@ Mutations:       001 ─→ 005
 Queries:         003 ─→ 006 ─→ 007
                   │      └───→ 008
                  004 ─────────↗
+                 021 ─→ 004 (004 keeps the 021 no-leak tests)
 
 Manifests:       009 representation contract
                   ↕ coordinates with
