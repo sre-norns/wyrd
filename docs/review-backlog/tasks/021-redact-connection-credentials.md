@@ -4,12 +4,12 @@ Shared context: [`CONTEXT.md`](../CONTEXT.md).
 
 | Field | Value |
 |---|---|
-| Status | `ready` |
+| Status | `done` |
 | Priority | `P0` |
 | Workstream | Queries |
 | Depends on | — |
 | Likely conflicts | 004 |
-| Owner | Unclaimed |
+| Owner | Claude Code |
 
 ## Why This Matters
 
@@ -195,14 +195,14 @@ check in tests, not as the mechanism.
 
 ## Acceptance Criteria / Definition of Done
 
-- [ ] Required Outcome 1–4 hold.
-- [ ] The secret-leak table test fails on `c4bf9c8` and passes after the change.
-- [ ] Existing `TestConfig_Dialector` cases still pass, unchanged.
-- [ ] `errors.Is(err, ErrInvalidDBUrl)` holds for every unparseable URL case.
-- [ ] `pkg/dbstore/README.md` documents encoding, overrides, and error redaction.
-- [ ] Task 004 notes that its connection-contract work must keep the 021 tests.
-- [ ] No unrelated changes.
-- [ ] Full validation passes.
+- [x] Required Outcome 1–4 hold.
+- [x] The secret-leak table test fails on `c4bf9c8` and passes after the change.
+- [x] Existing `TestConfig_Dialector` cases still pass, unchanged.
+- [x] `errors.Is(err, ErrInvalidDBUrl)` holds for every unparseable URL case.
+- [x] `pkg/dbstore/README.md` documents encoding, overrides, and error redaction.
+- [x] Task 004 notes that its connection-contract work must keep the 021 tests.
+- [x] No unrelated changes.
+- [x] Full validation passes.
 
 ## Required Tests
 
@@ -248,9 +248,54 @@ git diff --check
 
 Fill this in before marking the task `done`:
 
-- **Implemented:**
-- **Tests added/updated:**
-- **Documentation updated:**
-- **Compatibility/migration:**
-- **Validation evidence:**
-- **Follow-ups:**
+- **Implemented:** `Config.Dialector()` replaces every `dburl.Parse` error
+  with a fixed message wrapped in `ErrInvalidDBUrl`
+  (`sanitizeURLError`). A `dburl.Error` constant is kept, because it is a
+  fixed string. A `*url.Error` is never formatted or wrapped. For Postgres,
+  `User`, `Password`, `DBName` and `Port` are set on the parsed dburl DSN URL
+  (`url.UserPassword`, path, `net.JoinHostPort` with the integer port, or a
+  `port=` query option when there is no single URL host). Each override drops
+  the query option that would win over it in pgx. Other query options keep
+  their encoding. With no override, the dburl DSN is used byte for byte. The
+  final DSN is validated eagerly with `pgx.ParseConfig`, the same parse that
+  `gorm.Open` runs. It opens no connection. Its error is replaced by a fixed
+  message. A Postgres `URL` combined with `DSN` is rejected: it always failed
+  in pgx before. Task 004 owns the final contract. MySQL and SQLite are
+  unchanged except for error sanitizing. `pgx/v5` was promoted to a direct
+  dependency.
+- **Tests added/updated:** `pkg/dbstore/config_secrets_test.go`:
+  `TestConfig_DialectorNeverLeaksCredentials` (each of `/ # ? @ :` alone, the
+  full secret in postgres, postgresql, mysql and sqlite URLs, unsupported and
+  unknown schemes with credentials, a bad query option, URL plus DSN, and a URL
+  plus `User`/`Password`). It checks `Error()`, `%+v` and `%#v` for any
+  3-character substring of the secret and of the user, and checks that neither
+  `*url.Error` nor `*pgconn.ParseConfigError` can be unwrapped.
+  `TestConfig_DialectorPostgresOverrides` parses the final DSN with
+  `pgconn.ParseConfig` and asserts the exact user, password, database, host
+  and port for these cases: awkward values (space, `'`, `\`, `=`, `"`,
+  `/ # ? @ : % +`), partial overrides, an IPv6 port override, the Cloud SQL
+  socket host, preserved query options, and overrides winning over query
+  options. `TestConfig_DialectorLiveWrongPassword` runs when
+  `WYRD_TEST_POSTGRES_URL` is set. The existing `TestConfig_Dialector` is
+  unchanged. 19 of the new cases failed before the fix, on `main` at `08b816b`
+  plus the dependency bump (dburl v0.55.2, pgx v5.12.0).
+- **Documentation updated:** `pkg/dbstore/README.md` has a new "Connecting"
+  section covering encoding, override precedence, URL plus DSN, and redacted
+  errors. The note in task 004 now names both tests and records the
+  empty-host socket URL finding.
+- **Compatibility/migration:** No exported API change. Valid configs produce
+  the same DSN as before when there are no overrides. Postgres overrides used
+  to produce a DSN that pgx could not parse, so they now work for the first
+  time. Error messages for invalid URLs changed text, and
+  `errors.Is(err, ErrInvalidDBUrl)` still holds.
+- **Validation evidence:** `go test -race -count=1 -run 'TestConfig_'
+  ./pkg/dbstore/`, `go mod verify`, `go test -race -count=1 ./...`,
+  `go vet ./...`, `git diff --check`, and `govulncheck ./...` all pass
+  locally. The live wrong-password case was skipped locally (no Postgres).
+  It runs in CI against `postgres:18`.
+- **Downstream:** Tag `v0.7.1`. Bump `github.com/sre-norns/wyrd` in Exp-Bench
+  (api-server, system-operator) and Urth (api-server). They need no code
+  change.
+- **Follow-ups:** a `slog.LogValuer`/`String()` on `Config` that redacts
+  `Password` when the struct itself is logged. The empty-host Postgres socket
+  URL that dburl rewrites (recorded in task 004).
