@@ -11,6 +11,35 @@ var scenarios []Scenario
 total, err := store.Find(ctx, &scenarios, searchQuery)
 ```
 
+## Connecting
+
+`Config` (kong flags; `DB_URL`, `DB_USER`, `DB_PASS`, `DB_NAME` in the
+environment) selects the driver from the URL scheme. `Dialector()` returns the
+`gorm.Dialector`:
+
+```go
+dialector, err := dbstore.Config{URL: os.Getenv("DB_URL"), Password: os.Getenv("DB_PASS")}.Dialector()
+db, err := gorm.Open(dialector, &gorm.Config{})
+```
+
+The user name and password in `URL` must be percent-encoded. Encode every
+reserved character (`/ # ? @ : %` and others). Python's `urllib.parse.quote`
+leaves `/` unencoded by default, so pass `safe=""`. To avoid encoding, leave
+the credentials out of the URL and set `User` and `Password`.
+
+For Postgres, `User`, `Password`, `DBName` and `Port` override the matching
+parts of the URL, and any `user`, `password`, `dbname` or `port` query option.
+An empty override keeps the value in the URL. Other query options are kept as
+written, such as `sslmode` and a Cloud SQL socket
+(`postgres://svc@localhost/db?host=/cloudsql/project:region:instance`).
+`Dialector()` checks the final Postgres settings, so a syntax problem fails
+there and not in `gorm.Open`. A Postgres `URL` cannot be combined with `DSN`.
+MySQL and SQLite ignore the overrides.
+
+Errors from `Dialector()` never contain the URL, the user name, or the
+password. They say what to fix. `errors.Is(err, dbstore.ErrInvalidDBUrl)`
+reports a URL that does not parse.
+
 ## Scope
 
 Resources carry `metadata.account` and `metadata.project` (see

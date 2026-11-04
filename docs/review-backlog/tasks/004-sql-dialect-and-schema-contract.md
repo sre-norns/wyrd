@@ -8,7 +8,7 @@ Shared context: [`CONTEXT.md`](../CONTEXT.md).
 | Priority | `P0` |
 | Workstream | Queries |
 | Depends on | — |
-| Likely conflicts | 001, 003, 006, 008, 020 |
+| Likely conflicts | 001, 003, 006, 008, 020, 021 |
 | Owner | Unclaimed |
 
 ## Why This Matters
@@ -58,6 +58,18 @@ requiring them to know database-specific NULL, JSON, uniqueness, or DSN rules.
   are space-joined without dialect escaping.
 - `pkg/dbstore/config_test.go:36-41,64-69`: tests expect DSN-only failure and
   assert only the Adapter name, so the broken port is not exercised.
+- Task 021 (done) fixed credential leaks in `Config.Dialector()` errors and
+  the Postgres override assembly first, as a patch release. The connection
+  contract of this task must keep the 021 tests
+  `TestConfig_DialectorNeverLeaksCredentials` and
+  `TestConfig_DialectorPostgresOverrides` passing. 021 rejects a Postgres
+  `URL` combined with `DSN`. This task owns whether to support that mix.
+- Found during 021: with `xo/dburl` v0.55, a Postgres URL with an empty host,
+  for example `postgres://u:p@/db?host=/cloudsql/p:r:i`, is treated as a Unix
+  socket path. dburl generates `host=/db` with no database, which replaces the
+  `host` query option. Write such URLs with a host
+  (`postgres://u:p@localhost/db?host=/cloudsql/…`), which works. Decide
+  whether `Dialector()` should accept the empty-host form.
 
 ## Failure Sequence
 
